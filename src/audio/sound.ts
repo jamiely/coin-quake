@@ -4,6 +4,17 @@
  */
 
 const PENTATONIC = [0, 2, 4, 7, 9];
+/** Most spans sounding at the same instant anywhere within [start, end). Peaks occur where a span begins. */
+export function peakOverlap(spans: readonly [number, number][], start: number, end: number): number {
+  let peak = 0;
+  for (const t of [start, ...spans.map(([s]) => s).filter((s) => s > start && s < end)]) {
+    let n = 0;
+    for (const [s, e] of spans) if (s <= t && e > t) n++;
+    peak = Math.max(peak, n);
+  }
+  return peak;
+}
+
 /** Voice cap; celebrations stack a fanfare, choir, fireworks and cheers, so it leaves headroom for those. */
 const MAX_VOICES = 48;
 
@@ -211,9 +222,7 @@ export class Sound {
     const start = now + delay;
     const end = start + dur + 0.02;
     this.spans = this.spans.filter(([, e]) => e > now);
-    let overlapping = 0;
-    for (const [s0, e0] of this.spans) if (s0 < end && e0 > start) overlapping++;
-    if (overlapping >= MAX_VOICES) return null;
+    if (peakOverlap(this.spans, start, end) >= MAX_VOICES) return null;
     this.spans.push([start, end]);
     return { ctx: this.ctx, master: this.master };
   }
