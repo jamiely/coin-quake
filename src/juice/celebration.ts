@@ -4,6 +4,8 @@
  * continue" band rises from the bottom once it may be skipped. DOM only; the game supplies fireworks, music and
  * shake (drawn underneath, so the backdrop stays translucent). Reusable by any game.
  */
+import { fitScale, slamStart } from './fit';
+
 export interface CelebrationSpec {
   stamp: string;
   /** Smaller line under the stamp. */
@@ -31,6 +33,9 @@ export class Celebration {
   private spec: Required<CelebrationSpec> | null = null;
   private age = 0;
   private shown = -1;
+  /** Stamp scale that fits the screen at rest, and its capped slam start. */
+  private fit = 1;
+  private slam = 4;
 
   constructor(parent: HTMLElement) {
     const div = (className: string, parentEl: HTMLElement): HTMLDivElement => {
@@ -83,6 +88,11 @@ export class Celebration {
     this.el.style.setProperty('--tally-chars', String(Math.max(4, chars)));
     this.el.style.setProperty('--stamp-color', this.spec.color);
     this.el.classList.add('on');
+    // Measure the stamp untransformed: long stamps shrink to fit; the slam never balloons past the screen.
+    this.stamp.style.transform = 'none';
+    const screen = this.el.clientWidth || window.innerWidth;
+    this.fit = fitScale(this.stamp, screen * 0.9);
+    this.slam = slamStart(this.stamp.offsetWidth * this.fit, screen, 4);
   }
 
   /** Jumps to the end of the tally and closes. Returns false if it cannot be skipped yet. */
@@ -103,7 +113,8 @@ export class Celebration {
     this.rays.style.transform = `translate(-50%, -50%) rotate(${u * 18}deg) scale(${0.5 + 0.5 * Math.min(1, u / 0.35)})`;
     // Stamp: slams from 4x with a tilt, overshoots, settles, then wobbles slightly while the tally runs.
     const inT = Math.min(1, u / 0.18);
-    const scale = u < 0.18 ? 4 - 3 * inT * inT : u < 0.32 ? 1 - 0.12 * Math.sin(((u - 0.18) / 0.14) * Math.PI) : 1 + 0.02 * Math.sin(u * 9);
+    const slam = this.slam;
+    const scale = this.fit * (u < 0.18 ? slam - (slam - 1) * inT * inT : u < 0.32 ? 1 - 0.12 * Math.sin(((u - 0.18) / 0.14) * Math.PI) : 1 + 0.02 * Math.sin(u * 9));
     this.stamp.style.transform = `rotate(${u < 0.18 ? -25 * (1 - inT) - 6 : -6}deg) scale(${scale})`;
     this.stamp.style.opacity = String(Math.min(1, inT * 2));
     // Plaque: pops up from below just after the slam.

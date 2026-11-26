@@ -1,4 +1,5 @@
 import type { Juice } from './core';
+import { fitScale, slamStart } from './fit';
 
 /**
  * DOM overlay for screen-space juice: the full-screen flash, and big title cards ("QUAKE!!!") that slam in with an
@@ -18,6 +19,9 @@ export class Overlay {
   private titleLife = 1.4;
   private titlePriority = 0;
   private big = false;
+  /** Rest scale that fits the card to the screen, and the capped slam start (both measured when the text changes). */
+  private fit = 1;
+  private slam = 3;
 
   constructor(parent: HTMLElement) {
     this.el = document.createElement('div');
@@ -60,6 +64,7 @@ export class Overlay {
     this.card.classList.toggle('big', this.big);
     this.titleAge = 0;
     this.titleLife = life;
+    this.measure();
     return true;
   }
 
@@ -77,7 +82,8 @@ export class Overlay {
     const t = this.titleAge;
     // Slam: start huge and tilted, snap to 1 with an overshoot, hold, then zoom away.
     const inT = Math.min(1, u / 0.12);
-    const scale = u < 0.12 ? 3 - 2 * inT : u < 0.2 ? 1 - 0.1 * Math.sin(((u - 0.12) / 0.08) * Math.PI) : u > 0.85 ? 1 + ((u - 0.85) / 0.15) * 0.6 : 1;
+    const slam = this.slam;
+    const scale = this.fit * (u < 0.12 ? slam - (slam - 1) * inT : u < 0.2 ? 1 - 0.1 * Math.sin(((u - 0.12) / 0.08) * Math.PI) : u > 0.85 ? 1 + ((u - 0.85) / 0.15) * 0.25 : 1);
     const rot = u < 0.12 ? -12 * (1 - inT) : -4;
     const out = u > 0.85 ? 1 - (u - 0.85) / 0.15 : 1;
     this.title.style.opacity = String(Math.min(out, inT * 1.5));
@@ -93,6 +99,14 @@ export class Overlay {
       this.rays.style.opacity = String(Math.min(1, t / 0.15) * out);
       this.rays.style.transform = `translate(-50%, -50%) rotate(${t * 40}deg) scale(${0.6 + 0.4 * Math.min(1, t / 0.2)})`;
     }
+  }
+
+  /** Fits the title to 92% of the screen width and caps how far its slam-in overshoots. */
+  private measure(): void {
+    this.title.style.transform = 'translate(-50%, -50%)';
+    const screen = this.el.clientWidth || window.innerWidth;
+    this.fit = fitScale(this.title, screen * 0.92);
+    this.slam = slamStart(this.title.offsetWidth * this.fit, screen, 3);
   }
 
   dispose(): void {
