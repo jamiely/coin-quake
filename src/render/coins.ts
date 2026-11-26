@@ -142,7 +142,7 @@ function drawFace(g: CanvasRenderingContext2D, cx: number, cy: number, expr: Fac
  * kind still shows every expression.
  */
 function faceMaterial(map: THREE.Texture, emissive: string): THREE.MeshToonMaterial {
-  const mat = new THREE.MeshToonMaterial({ color: '#ffffff', map, gradientMap: toonRamp(), emissive, emissiveIntensity: 0.12 });
+  const mat = new THREE.MeshToonMaterial({ color: '#ffffff', map, gradientMap: toonRamp(), emissive, emissiveIntensity: 0.05 });
   mat.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nattribute float face;')

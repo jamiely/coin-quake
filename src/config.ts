@@ -176,12 +176,6 @@ export const RUN = {
 };
 
 export const RULES = {
-  startCoins: 50,
-  /** One credit press (the cabinet's C button). */
-  creditCoins: 50,
-  freePlay: true,
-  /** With free play, an empty bank refills after this long. */
-  freePlayRefillAfter: 10,
   pointsPerCoin: 10,
   hotMultiplier: 2,
   hotMinHold: 20,

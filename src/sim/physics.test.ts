@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DROPPER, MAX_COINS, RULES, SIM, TRAY, COIN } from '../config';
 import { Rng } from '../rng';
+import { dropperX } from '../rules/dropper';
 import { PhysicsWorld, firstEdge, type SimEvent } from './physics';
 
 const run = (world: PhysicsWorld, seconds: number): SimEvent[] => {
@@ -12,8 +13,8 @@ const run = (world: PhysicsWorld, seconds: number): SimEvent[] => {
 describe('PhysicsWorld', () => {
   it('boots with a settled pile that does not spill before play', async () => {
     const world = await PhysicsWorld.create(new Rng(3));
-    // A few strokes settle the overhang at boot; most of the pile stays.
-    expect(world.coins.length).toBeGreaterThan(RULES.startPile * 0.8);
+    // A few strokes settle the overhang at boot and the structure clears its footprint; the machine stays well stocked.
+    expect(world.coins.length).toBeGreaterThan(RULES.startPile * 0.55);
     const spilled = run(world, 3).filter((e) => e.type === 'frontExit' || e.type === 'sideExit');
     expect(spilled.length).toBeLessThan(world.coins.length * 0.05);
     world.dispose();
@@ -22,15 +23,16 @@ describe('PhysicsWorld', () => {
   it('pushes dropped coins off the front edge and keeps their tag', async () => {
     const world = await PhysicsWorld.create(new Rng(5));
     const events: SimEvent[] = [];
-    for (let i = 0; i < 40; i++) {
-      world.drop(((i % 7) - 3) * 4, { hot: true }, 'standard');
-      events.push(...run(world, 0.25));
+    // A held stream across the swing for 60 s: the deep three-tier tray takes about a minute to start paying steadily.
+    for (let i = 0; i < 240; i++) {
+      world.drop(dropperX(i * DROPPER.streamInterval), { hot: true }, 'standard');
+      events.push(...run(world, DROPPER.streamInterval));
     }
-    events.push(...run(world, 8));
+    events.push(...run(world, 5));
     const landed = events.filter((e) => e.type === 'landed');
     const front = events.filter((e) => e.type === 'frontExit');
-    expect(landed.length).toBe(40);
-    expect(front.length).toBeGreaterThan(10);
+    expect(landed.length).toBeGreaterThan(220);
+    expect(front.length).toBeGreaterThan(30);
 
     // A tagged coin nudged over the edge reports its tag.
     const tagged = world.coins.find((c) => c.tag?.hot)!;

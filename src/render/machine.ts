@@ -1,11 +1,13 @@
 import * as THREE from 'three';
-import { DROPPER, GATES, PUSHER, TRAY } from '../config';
+import { DECK, DROPPER, GATES, LOWER, PUSHER, TRAY } from '../config';
 import { backWall, chunkyText, roundRect, signCanvas } from './textures';
 import { INK, PALETTE, outlined, toon } from './toon';
 
 /** Static and animated parts of the cabinet the stage needs to move or repaint. */
 export interface Machine {
   pusher: THREE.Group;
+  /** The lower tray's pusher, sliding out from under the deck's step. */
+  lower: THREE.Group;
   carriage: THREE.Group;
   /** Bolt, the little robot riding the carriage (eyes are children). */
   bolt: THREE.Group;
@@ -40,24 +42,34 @@ export function buildMachine(scene: THREE.Scene): Machine {
   wall.position.set(0, 30, -45);
   scene.add(wall);
 
-  // Tray floor, cream with a mint inlay; cabinet sides in cherry.
-  scene.add(box(2 * hw, 2, TRAY.front - TRAY.back, cream, 0, -1, (TRAY.front + TRAY.back) / 2));
-  const inlay = new THREE.Mesh(new THREE.PlaneGeometry(2 * hw - 4, TRAY.front - PUSHER.frontMax - 3), toon('#ffe2b0'));
+  // Three tiers. The middle deck (mint inlay) is a raised floor with a striped step face; the deep lower tray (cream,
+  // with a gold inlay) runs out to the front edge.
+  const deckBack = TRAY.back;
+  scene.add(box(2 * hw, DECK.thickness, DECK.front - deckBack, cream, 0, DECK.y - DECK.thickness / 2, (DECK.front + deckBack) / 2));
+  const deckInlay = new THREE.Mesh(new THREE.PlaneGeometry(2 * hw - 4, DECK.front - PUSHER.frontMax - 1.5), toon('#c9f5e3'));
+  deckInlay.rotation.x = -Math.PI / 2;
+  deckInlay.position.set(0, DECK.y + 0.02, (DECK.front + PUSHER.frontMax) / 2);
+  scene.add(deckInlay);
+  const stepH = DECK.y - DECK.thickness - (TRAY.y + LOWER.height) - 0.15;
+  scene.add(box(2 * hw, stepH, 0.6, toon(PALETTE.goldDark), 0, TRAY.y + LOWER.height + 0.15 + stepH / 2, DECK.front - 0.3, 0.2));
+  scene.add(box(2 * hw, 2, TRAY.front - TRAY.back, cream, 0, TRAY.y - 1, (TRAY.front + TRAY.back) / 2));
+  const inlay = new THREE.Mesh(new THREE.PlaneGeometry(2 * hw - 4, TRAY.front - LOWER.frontMax - 3), toon('#ffe2b0'));
   inlay.rotation.x = -Math.PI / 2;
-  inlay.position.set(0, 0.02, (TRAY.front + PUSHER.frontMax) / 2);
+  inlay.position.set(0, TRAY.y + 0.02, (TRAY.front + LOWER.frontMax) / 2);
   scene.add(inlay);
   const railFront = TRAY.front - TRAY.openCorner;
-  const tallFront = PUSHER.frontMax + 2;
+  const tallFront = DECK.front + 1;
   for (const side of [-1, 1]) {
-    scene.add(box(3, DROPPER.y + 10, tallFront - TRAY.back + 6, cherry, side * (hw + 1.5), (DROPPER.y + 10) / 2 - 4, (tallFront + TRAY.back) / 2 - 3));
-    scene.add(box(1.6, 3.4, railFront - tallFront, toon(PALETTE.gold), side * (hw + 0.8), 1.7, (railFront + tallFront) / 2));
+    const wallH = DROPPER.y + 10 - TRAY.y;
+    scene.add(box(3, wallH, tallFront - TRAY.back + 6, cherry, side * (hw + 1.5), TRAY.y - 4 + wallH / 2, (tallFront + TRAY.back) / 2 - 3));
+    scene.add(box(1.6, 3.4, railFront - tallFront, toon(PALETTE.gold), side * (hw + 0.8), TRAY.y + 1.7, (railFront + tallFront) / 2));
   }
   // Base under the tray front, with the chute trough and its LED edge.
-  scene.add(box(2 * hw + 6, 6, 4, cherry, 0, -6, TRAY.front + 3));
+  scene.add(box(2 * hw + 6, 6, 4, cherry, 0, TRAY.y - 6, TRAY.front + 3));
   const edgeLights = new THREE.InstancedMesh(new THREE.SphereGeometry(0.55, 10, 8), new THREE.MeshBasicMaterial({ color: '#ffffff' }), 24);
   const m = new THREE.Matrix4();
   for (let i = 0; i < 24; i++) {
-    m.makeTranslation(-hw + 1.5 + (i * (2 * hw - 3)) / 23, -3.2, TRAY.front + 5.1);
+    m.makeTranslation(-hw + 1.5 + (i * (2 * hw - 3)) / 23, TRAY.y - 3.2, TRAY.front + 5.1);
     edgeLights.setMatrixAt(i, m);
     edgeLights.setColorAt(i, new THREE.Color(PALETTE.gold));
   }
@@ -70,6 +82,12 @@ export function buildMachine(scene: THREE.Scene): Machine {
   pusher.add(stripe);
   pusher.position.y = PUSHER.height / 2;
   scene.add(pusher);
+  // Lower pusher: a low mint block with a cherry stripe, so the three tiers read as three different machines.
+  const lower = new THREE.Group();
+  lower.add(box(2 * hw - 0.1, LOWER.height, LOWER.depth, toon('#2f8f7a'), 0, 0, 0));
+  lower.add(box(2 * hw - 0.2, 0.5, 0.2, toon(PALETTE.cherry), 0, 0.3, LOWER.depth / 2 + 0.05, 0));
+  lower.position.y = TRAY.y + LOWER.height / 2;
+  scene.add(lower);
 
   // Scraper wall and the glass front of the drop zone.
   const scraperH = DROPPER.y - PUSHER.height + 10;
@@ -165,7 +183,7 @@ export function buildMachine(scene: THREE.Scene): Machine {
   // Counter plate under the front edge: POINTS, COINS and HOT; repainted by the stage when values change.
   const counter = signCanvas(1024, 384);
   const counterMesh = new THREE.Mesh(new THREE.PlaneGeometry(2 * hw + 6, (2 * hw + 6) * 0.375), new THREE.MeshBasicMaterial({ map: counter.texture, transparent: true }));
-  counterMesh.position.set(0, -16, TRAY.front + 6);
+  counterMesh.position.set(0, TRAY.y - 16, TRAY.front + 6);
   counterMesh.rotation.x = -0.25;
   scene.add(counterMesh);
 
@@ -174,7 +192,7 @@ export function buildMachine(scene: THREE.Scene): Machine {
   const sideLights = new THREE.InstancedMesh(new THREE.SphereGeometry(0.7, 10, 8), new THREE.MeshBasicMaterial({ color: '#ffffff' }), perSide * 2);
   for (let s = 0; s < 2; s++) {
     for (let i = 0; i < perSide; i++) {
-      const y = -2 + (i * (DROPPER.y + 6)) / (perSide - 1);
+      const y = TRAY.y - 1 + (i * (DROPPER.y + 6 - TRAY.y)) / (perSide - 1);
       m.makeTranslation((s ? 1 : -1) * (hw + 1.5), y, tallFront + 0.2);
       sideLights.setMatrixAt(s * perSide + i, m);
       sideLights.setColorAt(s * perSide + i, new THREE.Color(PALETTE.gold));
@@ -202,7 +220,7 @@ export function buildMachine(scene: THREE.Scene): Machine {
   gauge.position.set(hw - 2.5, DROPPER.y + 19.5, DROPPER.z + 7);
   scene.add(gauge);
 
-  return { pusher, carriage, bolt, claw, laser, gates, counter, edgeLights, sideLights, gauge: { group: gauge, needle, face: faceMat }, topper: topperMesh };
+  return { pusher, lower, carriage, bolt, claw, laser, gates, counter, edgeLights, sideLights, gauge: { group: gauge, needle, face: faceMat }, topper: topperMesh };
 }
 
 /** Gauge dial: cream face, green-to-red arc over 240 degrees, ticks, and "PSI". */

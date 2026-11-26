@@ -1,0 +1,239 @@
+/* Run HUD: chunky outlined cartoon text, sized in --hu so it fits portrait and landscape alike. */
+.hud {
+  --hu: min(1vw, 0.625vh);
+  --ink: #2b1533;
+  --cream: #fff1d6;
+  --gold: #ffc83a;
+  --cherry: #e8344e;
+  --plum: #4a2457;
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 4;
+  font-family: "Arial Black", "Arial Rounded MT Bold", system-ui, sans-serif;
+  font-weight: 900;
+  line-height: 1;
+  color: var(--cream);
+  -webkit-text-stroke: 0.07em var(--ink);
+  paint-order: stroke fill;
+}
+
+.hud-chips {
+  position: absolute;
+  top: calc(var(--hu) * 2);
+  left: 50%;
+  display: flex;
+  gap: calc(var(--hu) * 2);
+  transform: translateX(-50%);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.hud.active .hud-chips {
+  opacity: 1;
+}
+
+.hud-chip {
+  min-width: calc(var(--hu) * 18);
+  padding: calc(var(--hu) * 1.2) calc(var(--hu) * 2.4);
+  font-size: calc(var(--hu) * 4.6);
+  text-align: center;
+  background: var(--plum);
+  border: calc(var(--hu) * 0.7) solid var(--ink);
+  border-radius: calc(var(--hu) * 3);
+  box-shadow: 0 calc(var(--hu) * 0.8) 0 var(--ink);
+}
+
+.hud-stock::before {
+  content: "";
+  display: inline-block;
+  width: 0.8em;
+  height: 0.8em;
+  margin-right: 0.3em;
+  vertical-align: -0.08em;
+  background: radial-gradient(circle at 35% 35%, #fff4b8, var(--gold) 55%, #d98a10);
+  border: 0.08em solid var(--ink);
+  border-radius: 50%;
+}
+
+.hud-chip.warn {
+  color: #ffb02e;
+  animation: hud-pulse 0.5s ease-in-out infinite alternate;
+}
+
+@keyframes hud-pulse {
+  to {
+    transform: scale(1.12);
+  }
+}
+
+.hud-banner,
+.hud-prompt {
+  position: absolute;
+  left: 50%;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translate(-50%, 0) scale(0.6);
+  transition:
+    opacity 0.2s,
+    transform 0.25s cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+
+.hud-banner {
+  top: 11%;
+  padding: 0.12em 0.5em;
+  font-size: min(calc(var(--hu) * 9), 11vw);
+  color: var(--gold);
+  background: var(--cherry);
+  border: 0.08em solid var(--ink);
+  border-radius: 0.25em;
+  box-shadow: 0 0.1em 0 var(--ink);
+}
+
+.hud-banner.danger {
+  background: var(--ink);
+  color: #ff5a3d;
+}
+
+.hud-prompt {
+  bottom: 30%;
+  font-size: min(calc(var(--hu) * 8.5), 10vw);
+  color: var(--gold);
+  text-shadow: 0 0.08em 0 var(--ink);
+}
+
+.hud-banner.on,
+.hud-prompt.on {
+  opacity: 1;
+  transform: translate(-50%, 0) scale(1);
+}
+
+.hud-prompt.on {
+  animation: hud-bob 0.9s ease-in-out infinite alternate;
+}
+
+@keyframes hud-bob {
+  to {
+    transform: translate(-50%, -0.12em) scale(1.06);
+  }
+}
+
+.hud-toast {
+  position: absolute;
+  top: calc(var(--hu) * 13);
+  left: 50%;
+  font-size: calc(var(--hu) * 5);
+  color: var(--gold);
+  opacity: 0;
+  transform: translate(-50%, -30%);
+  transition:
+    opacity 0.2s,
+    transform 0.25s;
+}
+
+.hud-toast.on {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+/* Initials and the table: full-screen panels over a dimmed machine. */
+.hud-entry,
+.hud-table {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--hu) * 4);
+  background: rgb(43 21 51 / 0.82);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.25s;
+}
+
+.hud-entry.on,
+.hud-table.on {
+  opacity: 1;
+  visibility: visible;
+}
+
+.hud-entry-title,
+.hud-table-title {
+  font-size: min(calc(var(--hu) * 8), 9vw);
+  color: var(--gold);
+}
+
+.hud-letters {
+  display: flex;
+  gap: calc(var(--hu) * 3);
+}
+
+.hud-letters span {
+  --hold: 0;
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: calc(var(--hu) * 19);
+  height: calc(var(--hu) * 24);
+  font-size: calc(var(--hu) * 17);
+  color: var(--cherry);
+  background: var(--cream);
+  border: calc(var(--hu) * 1) solid var(--ink);
+  border-radius: calc(var(--hu) * 3);
+  box-shadow: 0 calc(var(--hu) * 1) 0 var(--ink);
+}
+
+.hud-letters span.current {
+  color: var(--cream);
+  background: linear-gradient(to top, var(--gold) calc(var(--hold) * 100%), var(--cherry) calc(var(--hold) * 100%));
+  transform: scale(1.1);
+}
+
+.hud-letters span.locked {
+  color: var(--ink);
+  background: var(--gold);
+  -webkit-text-stroke: 0;
+}
+
+.hud-entry-help {
+  font-size: min(calc(var(--hu) * 4.2), 5vw);
+  color: var(--cream);
+}
+
+.hud-table-yours {
+  font-size: min(calc(var(--hu) * 5.5), 6.5vw);
+}
+
+.hud-table ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: rank;
+  font-size: min(calc(var(--hu) * 5.2), 6vw);
+}
+
+.hud-table li {
+  display: flex;
+  gap: 1.2em;
+  justify-content: space-between;
+  min-width: 11em;
+  padding: 0.18em 0.4em;
+  counter-increment: rank;
+}
+
+.hud-table li::before {
+  content: counter(rank) ".";
+  min-width: 1.6em;
+  color: var(--gold);
+}
+
+.hud-table li span:last-child {
+  margin-left: auto;
+}
+
+.hud-table li.mine {
+  color: var(--gold);
+  background: rgb(232 52 78 / 0.55);
+  border-radius: 0.3em;
+}

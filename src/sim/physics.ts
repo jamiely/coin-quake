@@ -54,6 +54,8 @@ export type SimEvent =
   | { type: 'sideExit'; x: number; figurine?: FigurineKind }
   /** A dropped coin hit the pile: `speed` at impact, `hit` how many coins it blasted, `strength` 0..1. */
   | { type: 'landed'; x: number; y: number; z: number; speed: number; hit: number; strength: number; kind: CoinKind }
+  /** The starting structure toppled: `count` build coins started tumbling at once. */
+  | { type: 'collapse'; x: number; y: number; z: number; count: number }
   /** A coin dump is about to fall (`in` seconds), then did fall. */
   | { type: 'dumpWarning'; in: number }
   | { type: 'dump'; count: number }
@@ -93,6 +95,7 @@ export class PhysicsWorld {
   readonly works: Works;
   private readonly bodies: RAPIER.RigidBody[] = [];
   private nextDump: number;
+  private collapsed = false;
   private dumpAt = -1;
 
   static async create(rng: Rng): Promise<PhysicsWorld> {
@@ -225,9 +228,36 @@ export class PhysicsWorld {
     this.works.before(this.world.timestep, this.bodies, works);
     this.world.step();
     this.works.after(this.world.timestep, this.bodies, works);
-    const events: SimEvent[] = [...works, ...this.dumps(), ...this.classify()];
+    const events: SimEvent[] = [...works, ...this.dumps(), ...this.collapses(), ...this.classify()];
     this.lastStepMs = performance.now() - t0;
     return events;
+  }
+
+  /**
+   * Detects the structure toppling: when a good share of the standing build coins are moving fast at once, it is
+   * falling over. Fires once per build (the first big collapse); later tumbles are just coins.
+   */
+  private collapses(): SimEvent[] {
+    if (this.collapsed || this.time < 1) return [];
+    let moving = 0;
+    let total = 0;
+    let sx = 0;
+    let sy = 0;
+    let sz = 0;
+    for (const c of this.coins) {
+      if (c.kind !== 'build') continue;
+      total++;
+      const v = c.body.linvel();
+      if (v.x * v.x + v.y * v.y + v.z * v.z < 400) continue;
+      const p = c.body.translation();
+      moving++;
+      sx += p.x;
+      sy += p.y;
+      sz += p.z;
+    }
+    if (total === 0 || moving < Math.max(8, total * 0.25)) return [];
+    this.collapsed = true;
+    return [{ type: 'collapse', x: sx / moving, y: sy / moving, z: sz / moving, count: moving }];
   }
 
   /** Random coin dumps: a warning, then a load of coins crashing onto the lower tray from above. */
@@ -423,34 +453,50 @@ export class PhysicsWorld {
    * coins so it stands out from the pile.
    */
   private build(structure: Structure): void {
-    const cz = (LOWER.frontMax + TRAY.front) / 2 - 1;
-    const top = (x: number, z: number) => this.surfaceY(x, z);
+    // In the clear strip between the lower pusher's full reach and the front edge, so nothing pushes it at boot.
+    const zFrom = LOWER.frontMax + 1.5;
+    const zTo = TRAY.front - 2.5;
+    const cz = (zFrom + zTo) / 2;
+    // Clear a flat footprint down to the tray floor first: stacked on the lumpy pile, builds slumped before play began.
+    const halfX = structure === 'ring' ? 7.5 : 15;
+    const halfZ = (zTo - zFrom) / 2;
+    for (let i = this.coins.length - 1; i >= 0; i--) {
+      const c = this.coins[i]!;
+      const p = c.body.translation();
+      if (c.figurine || Math.abs(p.x) > halfX || Math.abs(p.z - cz) > halfZ || p.y > DECK.y - 0.6) continue;
+      this.world.removeRigidBody(c.body);
+      this.coins[i] = this.coins[this.coins.length - 1]!;
+      this.coins.pop();
+    }
+    const top = () => TRAY.y + COIN.halfThickness;
     const t = COIN.halfThickness * 2 + 0.02;
     const place = (x: number, z: number, y: number) => {
       const body = this.addCoin(x, y, z, null, 'build');
       body.setLinvel({ x: 0, y: 0, z: 0 }, true);
+      // Not put to sleep: a body asleep from birth never got its floor contact and fell through when woken.
     };
     switch (structure) {
       case 'ring': {
         // A ring tower: rings of coins standing on their faces, stacked into a hollow cylinder.
         const n = 12;
-        const r = 5.6;
-        const base = top(0, cz);
+        const r = 4.6;
+        const base = top();
         for (let level = 0; level < 10; level++) {
           for (let i = 0; i < n; i++) {
             const a = (i / n) * Math.PI * 2 + (level % 2 ? Math.PI / n : 0);
-            place(Math.cos(a) * r, cz + Math.sin(a) * r, base + 0.4 + level * t);
+            place(Math.cos(a) * r, cz + Math.sin(a) * r, base + 0.02 + level * t);
           }
         }
         break;
       }
       case 'pyramid': {
-        const base = top(0, cz);
-        for (let level = 0; level < 6; level++) {
-          const side = 6 - level;
+        const base = top();
+        // A stepped ziggurat: a 5x5 base shrinking one coin every two levels, ten levels high.
+        for (let level = 0; level < 10; level++) {
+          const side = Math.max(1, 5 - Math.floor(level / 2));
           for (let i = 0; i < side; i++) {
             for (let j = 0; j < side; j++) {
-              place((i - (side - 1) / 2) * 3.05, cz + (j - (side - 1) / 2) * 3.05, base + 0.4 + level * t);
+              place((i - (side - 1) / 2) * 3.05, cz + (j - (side - 1) / 2) * 3.05, base + 0.02 + level * t);
             }
           }
         }
@@ -458,32 +504,22 @@ export class PhysicsWorld {
       }
       case 'columns': {
         // Tall coin stacks dotted across the tray, wobbly and begging to be knocked over.
-        for (const [x, dz] of [[-11, 0], [-5.5, -2], [0, 1], [5.5, -2], [11, 0]] as const) {
+        for (const [x, dz] of [[-11, 0], [-5.5, -2.5], [0, 1.5], [5.5, -2.5], [11, 0]] as const) {
           const z = cz + dz;
-          const base = top(x, z);
-          for (let level = 0; level < 14; level++) place(x + this.rng.range(-0.08, 0.08), z + this.rng.range(-0.08, 0.08), base + 0.4 + level * t);
+          const base = top();
+          for (let level = 0; level < 14; level++) place(x + this.rng.range(-0.08, 0.08), z + this.rng.range(-0.08, 0.08), base + 0.02 + level * t);
         }
         break;
       }
       case 'wall': {
         // A brick wall across the tray, staggered courses of coins edge to edge.
-        const base = top(0, cz);
+        const base = top();
         for (let level = 0; level < 9; level++) {
           const off = level % 2 ? 1.5 : 0;
-          for (let x = -13.5 + off; x <= 13.5; x += 3.05) place(x, cz, base + 0.4 + level * t);
+          for (let x = -13.5 + off; x <= 13.5; x += 3.05) place(x, cz, base + 0.02 + level * t);
         }
         break;
       }
     }
-  }
-
-  /** Height of the pile's top near (x, z): the highest coin within a coin's reach, or the tray floor. */
-  private surfaceY(x: number, z: number): number {
-    let y = TRAY.y;
-    for (const c of this.coins) {
-      const p = c.body.translation();
-      if (Math.hypot(p.x - x, p.z - z) < 6) y = Math.max(y, p.y + COIN.halfThickness);
-    }
-    return y;
   }
 }

@@ -3,7 +3,10 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
-import { DROPPER, GATES, PUSHER, type GateIndex } from '../config';
+import { DROPPER, GATES, LOWER, PUSHER, type GateIndex } from '../config';
+
+/** Seconds the opening shot of the structure lasts. */
+const REVEAL_TIME = 2.6;
 import type { Juice } from '../juice';
 import type { Tier } from '../rules/pressure';
 import type { PhysicsWorld } from '../sim/physics';
@@ -48,7 +51,8 @@ const TIER_LOOK: Record<Tier, { bg: string; bulbs: [string, string]; chase: numb
  * Framing: the box around the machine (cm) that must always be visible. Portrait (the cabinet's 1050x1680) fits the
  * height; wider screens fit the same box and show the side art.
  */
-const FIT = { halfWidth: 25, halfHeight: 46, centerY: 12, centerZ: -6, pitchDeg: 14, fov: 34 };
+/** Taller and steeper than before: three tiers and the deep tray below them must all show, front edge included. */
+const FIT = { halfWidth: 25, halfHeight: 50, centerY: 8, centerZ: 0, pitchDeg: 24, fov: 34 };
 
 
 export class Stage {
@@ -61,6 +65,11 @@ export class Stage {
   private readonly composer: EffectComposer;
   private readonly machine: Machine;
   private readonly coins: CoinsView;
+  private revealAt: THREE.Vector3 | null = null;
+  private revealStart = -1;
+  private revealK = 0;
+  private readonly reveal_ = new THREE.Vector3();
+  private readonly lookTmp = new THREE.Vector3();
   private readonly cast: Characters;
   private lastStroke = 0;
   private readonly c = new THREE.Color();
@@ -83,8 +92,9 @@ export class Stage {
     this.scene.background = new THREE.Color('#1c0d2b');
 
     this.scene.add(new THREE.HemisphereLight('#fff6e8', '#6a3a8a', 1.6));
-    const key = new THREE.DirectionalLight('#ffffff', 2.4);
-    key.position.set(-30, 80, 60);
+    // Key light from high and behind-left, so the steeper camera doesn't look straight into its reflection off the tray.
+    const key = new THREE.DirectionalLight('#ffffff', 1.9);
+    key.position.set(-40, 90, -10);
     this.scene.add(key);
 
     this.machine = buildMachine(this.scene);
@@ -95,7 +105,7 @@ export class Stage {
     this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
     // Bloom only catches the bright bits (lamps, laser, highlights); the cartoon stays crisp.
-    this.composer.addPass(new UnrealBloomPass(new THREE.Vector2(256, 256), 0.6, 0.4, 0.92));
+    this.composer.addPass(new UnrealBloomPass(new THREE.Vector2(256, 256), 0.5, 0.35, 0.96));
     this.composer.addPass(new OutputPass());
     this.resize();
   }
@@ -121,6 +131,8 @@ export class Stage {
 
   update(physics: PhysicsWorld, s: StageState, time: number, realTime: number): void {
     this.machine.pusher.position.z = physics.pusherFront - PUSHER.depth / 2;
+    this.machine.lower.position.z = physics.lowerFront - LOWER.depth / 2;
+    this.updateReveal(realTime);
     this.works ??= new WorksView(this.scene, physics.works.pegs.length);
     this.works.update(physics.works, realTime);
     this.coins.update(physics, realTime - this.lastRealTime, realTime);
@@ -227,7 +239,52 @@ export class Stage {
   }
 
   /** Offsets the camera from home by juice shake, kick and FOV punch. Call after `update`, before `render`. */
+  /**
+   * The starting structure's reveal: the camera opens close on the build and pulls back out to the whole machine, while
+   * a spotlight ring pulses around it. Call after a fresh machine is built.
+   */
+  reveal(physics: PhysicsWorld): void {
+    let n = 0;
+    const c = new THREE.Vector3();
+    for (const coin of physics.coins) {
+      if (coin.kind !== 'build') continue;
+      const p = coin.body.translation();
+      c.x += p.x;
+      c.y += p.y;
+      c.z += p.z;
+      n++;
+    }
+    // A new machine also gets a fresh random handful of wall doodads.
+    this.cast.shuffle(Math.floor(performance.now()) ^ physics.coins.length);
+    if (!n) return;
+    this.revealAt = c.multiplyScalar(1 / n);
+    this.revealStart = -1;
+  }
+
+  private updateReveal(t: number): void {
+    if (!this.revealAt) return;
+    if (this.revealStart < 0) this.revealStart = t;
+    const u = (t - this.revealStart) / REVEAL_TIME;
+    if (u >= 1) {
+      this.revealAt = null;
+      this.revealK = 0;
+      return;
+    }
+    // Hold close for the first 40%, then ease out to the home framing.
+    this.revealK = u < 0.4 ? 1 : 1 - ((u - 0.4) / 0.6) ** 2 * (3 - 2 * ((u - 0.4) / 0.6));
+  }
+
   applyCamera(juice: Juice): void {
+    if (this.revealAt && this.revealK > 0) {
+      // Blend from a close, low shot of the structure to home.
+      const k = this.revealK;
+      // A three-quarter shot from above and in front: the whole build fills the middle of the screen.
+      const close = this.reveal_.set(this.revealAt.x + 6, this.revealAt.y + 34, this.revealAt.z + 52);
+      this.camera.position.lerpVectors(this.home, close, k);
+      this.lookTmp.lerpVectors(this.lookAt, this.revealAt, k);
+      this.camera.lookAt(this.lookTmp);
+      return;
+    }
     const { shake, kick } = juice;
     this.camera.position.set(this.home.x + shake.x + kick.x, this.home.y + shake.y + kick.y, this.home.z);
     this.camera.lookAt(this.lookAt.x + shake.x * 0.5, this.lookAt.y + shake.y * 0.5, this.lookAt.z);

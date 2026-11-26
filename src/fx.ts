@@ -4,6 +4,7 @@ import { COIN_KINDS, DROPPER, TRAY, WORKS, type CoinKind } from './config';
 import { Celebration, Juice, Overlay, ParticlePool, PopupPool, type Recipe, type Weight } from './juice';
 import { PALETTE } from './render/toon';
 import type { PressureEvent, Tier } from './rules/pressure';
+import type { Run, RunEvent } from './rules/run';
 import type { WorksEvent } from './sim/works';
 
 /** Coin Quake's recipe table: every event at every weight (GAME_DESIGN.md §4.1). */
@@ -59,6 +60,7 @@ export class Fx {
   /** Seconds of dump-warning rumble left. */
   private dumpRumble = 0;
   private pendingWon = 0;
+  private lastEmpty = -1;
   private pendingX = 0;
   private lastPayPopup = -1;
   private lastComboPopup = -1;
@@ -218,10 +220,84 @@ export class Fx {
     this.popups.show(`+${count} COINS!`, { x: 0, y: 12, z: 6 }, { fill: PALETTE.gold, ink: '#2b1533', size: 4, life: 1.3, rise: 4, tilt: 0.3 });
   }
 
+  /** The C button: a jingle and a coin sparkle (free play: no credits to add). */
   credit(): void {
     this.juice.fire('credit');
     this.sound.credit();
-    this.popups.show('+50 COINS', { x: 0, y: -10, z: TRAY.front + 6 }, { fill: PALETTE.gold, ink: '#2b1533', size: 4, life: 1.1, rise: 5 });
+  }
+
+  /** A run starts: a coin-shower jingle and a GO! card. */
+  runStart(): void {
+    this.juice.fire('credit');
+    this.sound.credit();
+    this.overlay.titleCard('GO!', PALETTE.gold, 'DROP COINS • PUSH THEM OFF', 1, 1);
+  }
+
+  /** A fresh machine: forget the last run's pending effects. */
+  reset(): void {
+    this.feverPoints = 0;
+    this.volleys = [];
+    this.pendingWon = 0;
+    this.dumpRumble = 0;
+  }
+
+  /** The player pressed with an empty stock: a dry click. */
+  empty(): void {
+    if (this.clock - this.lastEmpty < 0.5) return;
+    this.lastEmpty = this.clock;
+    this.sound.loss();
+    this.popups.show('NO COINS!', { x: 0, y: DROPPER.y - 6, z: DROPPER.z + 5 }, { fill: '#ff5a3d', ink: '#2b1533', size: 2.4, life: 0.7, rise: 2, tilt: 0.4 });
+  }
+
+  /** Run milestones: Last Call, out of coins, a revive, the final push. */
+  run(event: RunEvent, run: Run): void {
+    switch (event) {
+      case 'lastCall':
+        this.juice.fire('tierUp');
+        this.sound.siren(1.2);
+        this.overlay.titleCard('LAST CALL!', '#ff5a3d', 'NO MORE REFILLS', 1.6, 4);
+        break;
+      case 'suddenDeath':
+        this.sound.siren(0.8);
+        this.overlay.titleCard('OUT OF COINS!', '#ff5a3d', `PUSH ONE OFF IN ${Math.ceil(run.graceLeft)}s`, 1.4, 4);
+        break;
+      case 'revive':
+        this.juice.fire('credit');
+        this.sound.credit();
+        this.overlay.titleCard('SAVED!', PALETTE.mint, '', 0.9, 3);
+        break;
+      case 'sweep':
+        this.juice.fire('dumpWarning');
+        this.sound.siren(0.6);
+        this.overlay.titleCard('FINAL PUSH!', PALETTE.gold, '', 1.2, 4);
+        break;
+      case 'lowStock':
+        this.popups.show('LOW COINS!', { x: 0, y: DROPPER.y - 6, z: DROPPER.z + 5 }, { fill: '#ffb02e', ink: '#2b1533', size: 2.6, life: 0.9, rise: 2 });
+        break;
+      case 'over':
+        break;
+    }
+  }
+
+  /** The run is over: the big finale with the final score counting up. */
+  finale(score: number): void {
+    this.juice.fire('celebrate', 5);
+    this.sound.fanfare();
+    this.sound.cheer();
+    this.confetti(700);
+    this.volley(14, 5);
+    this.celebration.start({ stamp: 'GAME OVER!', sub: 'FINAL SCORE', total: score, color: PALETTE.cherry, duration: 6 });
+  }
+
+  /** The starting structure topples: a timber call, a crash and a dust cloud. */
+  collapse(x: number, y: number, z: number, count: number): void {
+    this.juice.fire('dump', 4);
+    this.sound.avalanche();
+    for (let i = 0; i < 5; i++) {
+      this.particles.burst({ at: { x: x - 10 + i * 5, y: y + 1, z }, count: 16, color: '#fff1d6', speed: 28, dir: { x: 0, y: 0.5, z: 0 }, spread: 1.3, size: 2.4, life: 0.8, gravity: 6, drag: 3 }, this.rand);
+    }
+    this.particles.burst({ at: { x, y: y + 2, z }, count: 50, color: PALETTE.mint, speed: 50, dir: { x: 0, y: 1, z: 0.3 }, spread: 1, size: 0.8, life: 0.7, shape: 'chip', spin: true }, this.rand);
+    this.overlay.titleCard('TIMBER!', PALETTE.mint, `${count} COINS TOPPLE`, 1.2, 2);
   }
 
   /** Reacts to pressure rule events. */

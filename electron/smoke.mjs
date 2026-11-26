@@ -65,28 +65,59 @@ export function prepareSmoke(win, projectRoot) {
       `Game assets must remain local: ${completedResources}`,
     );
 
+    // The smoke profile persists between runs: start from an empty high-score table.
+    await evaluate("localStorage.removeItem('coin-quake.scores')");
     await win.loadURL("coinquake://app/index.html?test&seed=42");
     await waitFor(() => evaluate("Boolean(window.coinQuake)"), "deterministic startup");
-    const state = () => evaluate("(() => { const g = window.coinQuake; return { coins: g.economy.coins, bodies: g.physics.coins.length, frames: g.frames }; })()");
+    const state = () =>
+      evaluate(
+        "(() => { const g = window.coinQuake; return { phase: g.run.phase, stock: g.run.stock, bodies: g.physics.coins.length, frames: g.frames, points: g.economy.points, runs: g.runs, initials: !!g.initials, table: g.showingTable, playAgain: g.canPlayAgain }; })()",
+      );
+    const key = (type, keyCode, modifiers) => win.webContents.sendInputEvent({ type, keyCode, ...(modifiers ? { modifiers } : {}) });
     const initial = await state();
+    assert.equal(initial.phase, "ready", "the machine waits for a press");
 
-    // Real keyboard: hold Space to stream coins, release to stop.
-    win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Space" });
-    await waitFor(async () => (await state()).coins <= initial.coins - 3, "coins dropped by holding Space");
-    win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Space" });
+    // A real Space press starts a run; holding it streams coins from the stock.
+    key("keyDown", "Space");
+    await waitFor(async () => (await state()).phase === "playing", "a press starts a run");
+    const started = await state();
+    await waitFor(async () => (await state()).stock <= started.stock - 3, "coins dropped by holding Space");
+    key("keyUp", "Space");
     const afterDrop = await state();
     assert.ok(afterDrop.bodies > initial.bodies, "dropped coins must be in the machine");
 
-    // C adds one credit batch per press, even when the key repeats.
-    win.webContents.sendInputEvent({ type: "keyDown", keyCode: "C" });
-    win.webContents.sendInputEvent({ type: "keyDown", keyCode: "C", modifiers: ["isAutoRepeat"] });
-    win.webContents.sendInputEvent({ type: "keyUp", keyCode: "C" });
-    await waitFor(async () => (await state()).coins >= afterDrop.coins + 50, "credit added by C");
-    const afterCredit = await state();
-    assert.ok(afterCredit.coins < afterDrop.coins + 100, "a repeated C key must not add a second batch");
+    // C (the cabinet's credit and exit button) is harmless in free play, even when the key repeats.
+    key("keyDown", "C");
+    key("keyDown", "C", ["isAutoRepeat"]);
+    key("keyUp", "C");
+    await pause(300);
+    assert.equal((await state()).phase, "playing", "C must not end or restart a run");
 
     await pause(1000);
     const file = await screenshot("electron-smoke.png");
+
+    // End the run (Last Call with an empty stock): the finale, then initials (the first score always qualifies).
+    await evaluate("(() => { const g = window.coinQuake; g.lastCall(); g.run.stock = 0; })()");
+    await waitFor(async () => (await state()).phase === "over", "the run ends after Last Call", 60_000);
+    await waitFor(async () => (await state()).initials, "initials open after the finale", 30_000);
+    // Three 0.45 s holds lock three letters.
+    for (let i = 0; i < 3; i++) {
+      key("keyDown", "Space");
+      await pause(450);
+      key("keyUp", "Space");
+      await pause(150);
+    }
+    await waitFor(async () => (await state()).table, "the high-score table after initials");
+    const saved = await evaluate("localStorage.getItem('coin-quake.scores')");
+    assert.ok(saved && JSON.parse(saved).length === 1, `the score is saved: ${saved}`);
+
+    // Play again: a fresh machine, fresh stock and score.
+    await waitFor(async () => (await state()).playAgain, "the table accepts a press");
+    key("keyDown", "Space");
+    await waitFor(async () => (await state()).runs === 2 && (await state()).phase === "playing", "play again starts a second run");
+    key("keyUp", "Space");
+    const again = await state();
+    assert.ok(again.points === 0 || again.points < afterDrop.points + 1000, "a new run starts its score fresh");
 
     // A portrait window (the vertical cabinet monitor) keeps rendering.
     win.setContentSize(525, 840);
@@ -95,7 +126,7 @@ export function prepareSmoke(win, projectRoot) {
     await pause(500);
     const portrait = await screenshot("electron-smoke-portrait.png");
     assert.deepEqual(failures, [], "Renderer/resource failures");
-    console.log(`[electron-smoke] passed: WebGL, local assets, Space drops, C credit, portrait; screenshots=${file}, ${portrait}`);
+    console.log(`[electron-smoke] passed: WebGL, local assets, run start, Space drops, C harmless, finale, initials, saved score, play again, portrait; screenshots=${file}, ${portrait}`);
     app.quit();
   };
 }

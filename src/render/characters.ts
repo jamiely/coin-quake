@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { DROPPER, PUSHER, TRAY } from '../config';
+import { DECK, DROPPER, PUSHER, TRAY } from '../config';
 import { chunkyText, roundRect, signCanvas } from './textures';
 import { INK, PALETTE, outlined, toon } from './toon';
 
@@ -35,6 +35,13 @@ export class Characters {
   private readonly professor: { ctx: CanvasRenderingContext2D; texture: THREE.CanvasTexture; mesh: THREE.Mesh; shown: Expression | '' };
   private readonly critters: { group: THREE.Group; side: number; next: number; t: number; out: number }[] = [];
   private last = 0;
+  /**
+   * The wall doodads (the user: "too much at once; make it random which ones appear"): the porthole, the gauge eyes and
+   * the four critter holes. 3-4 show at a time; one swaps in or out every 40-60 s, popping in or shrinking away.
+   */
+  private readonly doodads: { node: THREE.Object3D; on: boolean; k: number }[] = [];
+  private nextSwap = 45;
+  private seed = 1;
 
   constructor(scene: THREE.Scene, pusher: THREE.Group, gauge: THREE.Group) {
     // Pusher face: on the block's front, below the gold stripe. Big eyes with brows, cheeks, and a mouth that grits.
@@ -78,6 +85,10 @@ export class Characters {
       gauge.add(eye);
       this.gaugeEyes.push({ pupil, lid });
     }
+    const eyes = new THREE.Group();
+    for (const child of [...gauge.children].slice(-2)) eyes.add(child);
+    gauge.add(eyes);
+    this.doodads.push({ node: eyes, on: true, k: 1 });
 
     // Professor Pockets in a round window on the topper's left.
     const portrait = signCanvas(256, 256);
@@ -89,6 +100,7 @@ export class Characters {
     porthole.position.set(-TRAY.halfWidth + 2.5, DROPPER.y + 19.5, DROPPER.z + 7);
     scene.add(porthole);
     this.professor = { ...portrait, mesh: window, shown: '' };
+    this.doodads.push({ node: porthole, on: true, k: 1 });
 
     // Critters: little round gremlins that pop out of holes in the cabinet's side walls now and then.
     const colors = ['#7ed957', '#ff9f43', '#b18cff', '#59c3ff'];
@@ -115,16 +127,62 @@ export class Characters {
       }
       g.add(hole, body);
       // Holes in the front face of each side wall, at two heights.
-      g.position.set(side * (TRAY.halfWidth + 1.5), i < 2 ? 22 : 12, PUSHER.frontMax + 3.1);
+      g.position.set(side * (TRAY.halfWidth + 1.5), i < 2 ? 22 : 10, DECK.front + 1.2);
       g.userData.body = body;
       scene.add(g);
       this.critters.push({ group: g, side, next: 3 + i * 2.5, t: 0, out: 0 });
+      this.doodads.push({ node: g, on: true, k: 1 });
+    }
+    this.shuffle(1);
+  }
+
+  /** Picks a fresh random 3-4 of the doodads (a new run). `seed` keeps it reproducible per run. */
+  shuffle(seed: number): void {
+    this.seed = (seed >>> 0) || 1;
+    const n = 3 + (this.rand() < 0.5 ? 1 : 0);
+    const order = this.doodads.map((_, i) => i).sort(() => this.rand() - 0.5);
+    this.doodads.forEach((d, i) => {
+      d.on = order.indexOf(i) < n;
+      d.k = 0;
+    });
+    this.nextSwap = this.last + 40 + this.rand() * 20;
+  }
+
+  private rand(): number {
+    // xorshift: cosmetic only, independent of the simulation's RNG.
+    let x = this.seed;
+    x ^= x << 13;
+    x ^= x >>> 17;
+    x ^= x << 5;
+    this.seed = x >>> 0;
+    return this.seed / 4294967296;
+  }
+
+  /** Every 40-60 s one shown doodad leaves and a hidden one arrives. */
+  private rotate(t: number, dt: number): void {
+    if (t >= this.nextSwap) {
+      this.nextSwap = t + 40 + this.rand() * 20;
+      const shown = this.doodads.filter((d) => d.on);
+      const hidden = this.doodads.filter((d) => !d.on);
+      if (shown.length && hidden.length) {
+        shown[Math.floor(this.rand() * shown.length)]!.on = false;
+        hidden[Math.floor(this.rand() * hidden.length)]!.on = true;
+      }
+    }
+    for (const d of this.doodads) {
+      // Springy pop in, quick shrink out.
+      const target = d.on ? 1 : 0;
+      d.k += (target - d.k) * Math.min(1, dt * (d.on ? 6 : 9));
+      const pop = d.on && d.k < 0.98 ? 1 + 0.25 * Math.sin(d.k * Math.PI) : 1;
+      d.node.visible = d.k > 0.01;
+      d.node.scale.setScalar(Math.max(0.001, d.k * pop));
     }
   }
 
   update(m: Mood, t: number): void {
     const dt = Math.min(0.1, Math.max(0, t - this.last));
     this.last = t;
+    this.rotate(t, dt);
     this.updatePusher(m, t);
     this.updateGauge(m, t);
     this.updateProfessor(m);
