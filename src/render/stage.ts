@@ -4,8 +4,10 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { COIN, DROPPER, GATES, MAX_COINS, PUSHER, type GateIndex } from '../config';
+import type { Juice } from '../juice';
+import type { Tier } from '../rules/pressure';
 import type { PhysicsWorld } from '../sim/physics';
-import { paintCounter, buildMachine, type Machine } from './machine';
+import { gaugeAngle, paintCounter, buildMachine, type Machine } from './machine';
 import { coinFace } from './textures';
 import { PALETTE, fatten, outlineMat, toon } from './toon';
 
@@ -18,7 +20,21 @@ export interface StageState {
   coins: number;
   /** Seconds since the last drop, for the claw snap. */
   sinceDrop: number;
+  tier: Tier;
+  /** 0..100. */
+  pressure: number;
+  /** Seconds of QUAKE fever left (0 when calm). */
+  fever: number;
+  combo: number;
 }
+
+/** Background, marquee and chase speed per pressure tier (GAME_DESIGN.md §4.3). */
+const TIER_LOOK: Record<Tier, { bg: string; bulbs: [string, string]; chase: number }> = {
+  0: { bg: '#1c0d2b', bulbs: ['#9ff3ff', '#2a6a8a'], chase: 4 },
+  1: { bg: '#241034', bulbs: ['#fff36b', PALETTE.goldDark], chase: 7 },
+  2: { bg: '#2e0f3a', bulbs: ['#ff7af0', '#8a1f6a'], chase: 11 },
+  3: { bg: '#3a0d22', bulbs: ['#ff5a3d', '#7a1010'], chase: 16 },
+};
 
 /**
  * Framing: the box around the machine (cm) that must always be visible. Portrait (the cabinet's 1050x1680) fits the
@@ -39,6 +55,7 @@ export class Stage {
   private readonly coinOutlines: THREE.InstancedMesh;
   private readonly m = new THREE.Matrix4();
   private readonly scale = new THREE.Vector3(1, 1, 1);
+  private readonly c = new THREE.Color();
   private painted = '';
 
   constructor(private readonly container: HTMLElement) {
@@ -82,7 +99,7 @@ export class Stage {
     this.composer.setSize(w, h);
     this.camera.aspect = w / Math.max(1, h);
     // Distance that fits FIT's box on the tighter axis.
-    const tanV = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
+    const tanV = Math.tan(THREE.MathUtils.degToRad(FIT.fov / 2));
     const dist = Math.max(FIT.halfHeight / tanV, FIT.halfWidth / (tanV * this.camera.aspect));
     const pitch = THREE.MathUtils.degToRad(FIT.pitchDeg);
     this.home.set(0, FIT.centerY + Math.sin(pitch) * dist, FIT.centerZ + Math.cos(pitch) * dist);
@@ -95,7 +112,7 @@ export class Stage {
     return this.camera.aspect < 1 ? 'portrait' : 'landscape';
   }
 
-  update(physics: PhysicsWorld, s: StageState, time: number): void {
+  update(physics: PhysicsWorld, s: StageState, time: number, realTime: number): void {
     this.machine.pusher.position.z = physics.pusherFront - PUSHER.depth / 2;
     this.syncCoins(physics);
 
@@ -124,13 +141,49 @@ export class Stage {
       paintCounter(this.machine.counter.ctx, s.points, s.coins, label);
       this.machine.counter.texture.needsUpdate = true;
     }
-    const lights = this.machine.edgeLights;
-    const c = new THREE.Color();
-    for (let i = 0; i < lights.count; i++) {
-      const on = (Math.floor(time * 8) + i) % 4 === 0;
-      lights.setColorAt(i, c.set(on ? '#fff6c0' : PALETTE.goldDark));
+    this.animateLights(s, realTime);
+    // Gauge: needle follows pressure with a nervous tremble that grows with it.
+    const tremble = (s.pressure / 100) ** 2 * 0.08 * Math.sin(realTime * 47) + (s.fever > 0 ? 0.15 * Math.sin(realTime * 31) : 0);
+    this.machine.gauge.needle.rotation.z = gaugeAngle(s.pressure) + tremble;
+    const pulse = s.tier >= 3 || s.fever > 0 ? 1 + 0.06 * Math.sin(realTime * 14) : 1;
+    this.machine.gauge.group.scale.setScalar(pulse);
+    this.machine.topper.scale.setScalar(s.fever > 0 ? 1 + 0.04 * Math.sin(realTime * 18) : 1);
+  }
+
+  private animateLights(s: StageState, t: number): void {
+    const fever = s.fever > 0;
+    const look = TIER_LOOK[s.tier];
+    (this.scene.background as THREE.Color).lerp(this.c.set(fever ? '#3a1050' : look.bg), 0.05);
+    const chase = fever ? 22 : look.chase;
+    const step = Math.floor(t * chase);
+    const side = this.machine.sideLights;
+    const half = side.count / 2;
+    for (let i = 0; i < side.count; i++) {
+      const k = i % half;
+      // Fever: rainbow sweep; otherwise a chase climbing both sides.
+      if (fever) side.setColorAt(i, this.c.setHSL((t * 0.8 + k / half) % 1, 1, 0.6));
+      else side.setColorAt(i, this.c.set((step - k) % 3 === 0 ? look.bulbs[0] : look.bulbs[1]));
     }
-    lights.instanceColor!.needsUpdate = true;
+    side.instanceColor!.needsUpdate = true;
+    const edge = this.machine.edgeLights;
+    for (let i = 0; i < edge.count; i++) {
+      if (fever) edge.setColorAt(i, this.c.setHSL((t * 1.2 + i / edge.count) % 1, 1, 0.65));
+      else edge.setColorAt(i, this.c.set((step + i) % 4 === 0 ? '#fff6c0' : PALETTE.goldDark));
+    }
+    edge.instanceColor!.needsUpdate = true;
+  }
+
+  /** Offsets the camera from home by juice shake, kick and FOV punch. Call after `update`, before `render`. */
+  applyCamera(juice: Juice): void {
+    const { shake, kick } = juice;
+    this.camera.position.set(this.home.x + shake.x + kick.x, this.home.y + shake.y + kick.y, this.home.z);
+    this.camera.lookAt(this.lookAt.x + shake.x * 0.5, this.lookAt.y + shake.y * 0.5, this.lookAt.z);
+    this.camera.rotateZ(shake.roll);
+    const fov = FIT.fov + juice.fovOffset;
+    if (Math.abs(this.camera.fov - fov) > 1e-3) {
+      this.camera.fov = fov;
+      this.camera.updateProjectionMatrix();
+    }
   }
 
   render(): void {

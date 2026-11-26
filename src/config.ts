@@ -64,5 +64,5 @@ export const RULES = {
   hotMinHold: 20,
   hotMaxHold: 30,
   /** Coins already on the machine when it boots. */
-  startPile: 250,
+  startPile: 290,
 };

@@ -176,5 +176,9 @@ export class PhysicsWorld {
     }
     for (let i = 0; i < 240; i++) this.world.step();
     this.world.removeRigidBody(fence);
+    // Run the pusher for a few strokes without the fence, discarding what spills, so the game starts on a settled
+    // overhang instead of an avalanche of free coins in its first seconds.
+    for (let i = 0; i < 4 * PUSHER.period * SIM.hz; i++) this.step();
+    this.time = 0;
   }
 }

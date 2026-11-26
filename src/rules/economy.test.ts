@@ -25,6 +25,14 @@ describe('Economy', () => {
     expect(e.points).toBe(RULES.pointsPerCoin * (RULES.hotMultiplier + 2));
   });
 
+  it('drops for free in fever and applies the fever multiplier', () => {
+    const e = new Economy(new Rng(1));
+    e.coins = 0;
+    expect(e.tryDrop(0, true)).not.toBeNull();
+    expect(e.coins).toBe(0);
+    expect(e.frontExit({ hot: false }, 3)).toBe(RULES.pointsPerCoin * 3);
+  });
+
   it('returns a coin to the bank for every front exit', () => {
     const e = new Economy(new Rng(1));
     const before = e.coins;

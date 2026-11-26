@@ -12,6 +12,10 @@ export interface Machine {
   gates: { plate: THREE.Mesh; lamp: THREE.MeshToonMaterial; hot: THREE.Mesh }[];
   counter: { ctx: CanvasRenderingContext2D; texture: THREE.CanvasTexture };
   edgeLights: THREE.InstancedMesh;
+  /** Marquee bulbs up both cabinet sides; the stage animates their chase by pressure tier. */
+  sideLights: THREE.InstancedMesh;
+  gauge: { group: THREE.Group; needle: THREE.Group; face: THREE.MeshBasicMaterial };
+  topper: THREE.Mesh;
 }
 
 const hw = TRAY.halfWidth;
@@ -160,7 +164,76 @@ export function buildMachine(scene: THREE.Scene): Machine {
   counterMesh.rotation.x = -0.25;
   scene.add(counterMesh);
 
-  return { pusher, carriage, claw, laser, gates, counter, edgeLights };
+  // Marquee bulbs up the front edge of both side walls.
+  const perSide = 18;
+  const sideLights = new THREE.InstancedMesh(new THREE.SphereGeometry(0.7, 10, 8), new THREE.MeshBasicMaterial({ color: '#ffffff' }), perSide * 2);
+  for (let s = 0; s < 2; s++) {
+    for (let i = 0; i < perSide; i++) {
+      const y = -2 + (i * (DROPPER.y + 6)) / (perSide - 1);
+      m.makeTranslation((s ? 1 : -1) * (hw + 1.5), y, tallFront + 0.2);
+      sideLights.setMatrixAt(s * perSide + i, m);
+      sideLights.setColorAt(s * perSide + i, new THREE.Color(PALETTE.gold));
+    }
+  }
+  scene.add(sideLights);
+
+  // Pressure gauge: a big glass dial with a needle, beside the topper.
+  const gaugeFace = signCanvas(256, 256);
+  paintGauge(gaugeFace.ctx);
+  const gauge = new THREE.Group();
+  const faceMat = new THREE.MeshBasicMaterial({ map: gaugeFace.texture, transparent: true });
+  const face = new THREE.Mesh(new THREE.CircleGeometry(4.2, 40), faceMat);
+  const rimMesh = new THREE.Mesh(new THREE.TorusGeometry(4.3, 0.45, 10, 40), toon(PALETTE.goldDark));
+  outlined(rimMesh, 0.2);
+  const needle = new THREE.Group();
+  const needleBar = new THREE.Mesh(new THREE.BoxGeometry(0.35, 3.4, 0.2), new THREE.MeshBasicMaterial({ color: INK }));
+  needleBar.position.y = 1.5;
+  needle.add(needleBar);
+  const hub = new THREE.Mesh(new THREE.CircleGeometry(0.55, 16), new THREE.MeshBasicMaterial({ color: PALETTE.cherry }));
+  hub.position.z = 0.25;
+  needle.add(hub);
+  needle.position.z = 0.15;
+  gauge.add(face, rimMesh, needle);
+  gauge.position.set(hw - 2.5, DROPPER.y + 19.5, DROPPER.z + 7);
+  scene.add(gauge);
+
+  return { pusher, carriage, claw, laser, gates, counter, edgeLights, sideLights, gauge: { group: gauge, needle, face: faceMat }, topper: topperMesh };
+}
+
+/** Gauge dial: cream face, green-to-red arc over 240 degrees, ticks, and "PSI". */
+function paintGauge(g: CanvasRenderingContext2D): void {
+  g.fillStyle = PALETTE.cream;
+  g.beginPath();
+  g.arc(128, 128, 124, 0, Math.PI * 2);
+  g.fill();
+  const start = Math.PI * (5 / 6);
+  const span = Math.PI * (4 / 3);
+  const bands = [PALETTE.mint, PALETTE.gold, '#ff3fa4', '#ff3d2e'];
+  bands.forEach((color, i) => {
+    g.strokeStyle = color;
+    g.lineWidth = 26;
+    g.beginPath();
+    g.arc(128, 128, 92, start + (span * i) / 4, start + (span * (i + 1)) / 4);
+    g.stroke();
+  });
+  g.strokeStyle = INK;
+  g.lineWidth = 5;
+  for (let i = 0; i <= 10; i++) {
+    const a = start + (span * i) / 10;
+    g.beginPath();
+    g.moveTo(128 + Math.cos(a) * 70, 128 + Math.sin(a) * 70);
+    g.lineTo(128 + Math.cos(a) * 80, 128 + Math.sin(a) * 80);
+    g.stroke();
+  }
+  chunkyText(g, 'PSI', 128, 196, 34, PALETTE.cherry);
+}
+
+/** Needle angle (radians, about +z) for pressure 0..100, matching the dial's 240 degree arc. */
+export function gaugeAngle(pressure: number): number {
+  // Canvas angles run clockwise with y down; the mesh's +z rotation runs counter-clockwise with y up.
+  const start = Math.PI * (5 / 6);
+  const a = start + (Math.PI * (4 / 3) * Math.max(0, Math.min(100, pressure))) / 100;
+  return -a - Math.PI / 2;
 }
 
 /** Repaints the counter plate. */

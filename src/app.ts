@@ -1,7 +1,10 @@
+import { Sound } from './audio/sound';
 import { MAX_COINS, SIM } from './config';
+import { Fx } from './fx';
 import { Stage } from './render/stage';
 import { Trigger, dropperX, gateAt } from './rules/dropper';
 import { Economy } from './rules/economy';
+import { Pressure } from './rules/pressure';
 import { Rng } from './rng';
 import { PhysicsWorld } from './sim/physics';
 
@@ -38,7 +41,10 @@ export class Game {
   }
 
   readonly economy: Economy;
+  readonly pressure = new Pressure();
   readonly stage: Stage;
+  readonly sound = new Sound();
+  readonly fx: Fx;
 
   private constructor(
     private readonly root: HTMLElement,
@@ -52,6 +58,9 @@ export class Game {
     viewport.id = 'viewport';
     root.appendChild(viewport);
     this.stage = new Stage(viewport);
+    // Effects use their own RNG stream so cosmetic randomness never changes a seeded run.
+    const fxRng = new Rng(options.seed ^ 0x5bd1e995);
+    this.fx = new Fx(this.stage.scene, root, this.sound, () => fxRng.next());
     if (options.debug) {
       this.perfEl = document.createElement('pre');
       this.perfEl.id = 'perf';
@@ -67,6 +76,7 @@ export class Game {
   }
 
   press(): void {
+    this.sound.unlock();
     this.trigger.press(this.simTime);
   }
 
@@ -75,7 +85,14 @@ export class Game {
   }
 
   addCredits(): void {
+    this.sound.unlock();
     this.economy.addCredits();
+    this.fx.credit();
+  }
+
+  /** Debug: QUAKE now. */
+  quake(): void {
+    for (const e of this.pressure.quake()) this.fx.pressure(e);
   }
 
   /** Debug stress preset: fill the machine to the body cap. */
@@ -94,6 +111,7 @@ export class Game {
   dispose(): void {
     cancelAnimationFrame(this.raf);
     for (const off of this.unlisten) off();
+    this.fx.overlay.dispose();
     this.stage.dispose();
     this.physics.dispose();
     this.root.replaceChildren();
@@ -102,16 +120,34 @@ export class Game {
   private tick(): void {
     this.simTime += 1 / SIM.hz;
     this.economy.tick(this.simTime);
+    for (const e of this.pressure.tick(this.simTime)) this.fx.pressure(e);
     if (this.trigger.due(this.simTime)) {
       const x = this.dropperX;
-      const tag = this.economy.tryDrop(gateAt(x));
+      const fever = this.pressure.inFever;
+      const tag = this.economy.tryDrop(gateAt(x), fever);
       if (tag) {
-        if (this.physics.drop(x, tag)) this.lastDropAt = this.simTime;
-        else this.economy.coins++; // body cap: refund
+        if (this.physics.drop(x, tag)) {
+          this.lastDropAt = this.simTime;
+          this.fx.drop(x, tag.hot);
+        } else if (!fever) {
+          this.economy.coins++; // body cap: refund
+        }
       }
     }
     for (const e of this.physics.step()) {
-      if (e.type === 'frontExit') this.economy.frontExit(e.tag);
+      if (e.type === 'frontExit') {
+        const hot = Boolean(e.tag?.hot);
+        const fever = this.pressure.inFever;
+        const won = this.economy.frontExit(e.tag, this.pressure.multiplier);
+        const events = this.pressure.payout(hot);
+        this.fx.payout(e.x, won, this.pressure.combo, hot, fever);
+        for (const pe of events) this.fx.pressure(pe);
+      } else if (e.type === 'sideExit') {
+        this.fx.loss(e.x);
+      } else {
+        this.fx.land(e.x, e.z, e.speed);
+        for (const pe of this.pressure.landing()) this.fx.pressure(pe);
+      }
     }
   }
 
@@ -119,7 +155,8 @@ export class Game {
     this.raf = requestAnimationFrame(this.frame);
     const dt = Math.min(0.25, (now - this.last) / 1000);
     this.last = now;
-    this.acc += dt;
+    // Hit-stop freezes and slow-mo slows the simulation; effects and rendering run on real time.
+    this.acc += dt * this.fx.juice.timeScale;
     let steps = 0;
     let physicsMs = 0;
     while (this.acc >= 1 / SIM.hz && steps < SIM.maxStepsPerFrame) {
@@ -139,9 +176,17 @@ export class Game {
         points: this.economy.points,
         coins: this.economy.coins,
         sinceDrop: this.lastDropAt < 0 ? 99 : this.simTime - this.lastDropAt,
+        tier: this.pressure.tier,
+        pressure: this.pressure.value,
+        fever: this.pressure.fever,
+        combo: this.pressure.combo,
       },
       this.simTime,
+      now / 1000,
     );
+    this.fx.setRumble(this.pressure.tier, this.pressure.inFever);
+    this.fx.update(dt, this.stage.camera);
+    this.stage.applyCamera(this.fx.juice);
     this.stage.render();
     this.frames++;
     this.recordPerf(dt, physicsMs, performance.now() - t0);
@@ -161,7 +206,8 @@ export class Game {
         `fps ${this.perf.fps}  frame ${this.perf.frame.toFixed(1)} ms\n` +
         `physics ${this.perf.physics.toFixed(2)} ms  render ${this.perf.render.toFixed(2)} ms\n` +
         `coins ${this.physics.coins.length}/${MAX_COINS}  draws ${info.calls}  tris ${info.triangles}\n` +
-        `[S] stress  [C] +coins`;
+        `particles ${this.fx.particles.live}  pressure ${this.pressure.value.toFixed(0)}%  combo ${this.pressure.combo}\n` +
+        `[S] stress  [Q] quake  [C] +coins`;
     }
   }
 
@@ -179,6 +225,8 @@ export class Game {
         if (!e.repeat) this.addCredits();
       } else if (e.code === 'KeyS' && this.options.debug && !e.repeat) {
         this.stress();
+      } else if (e.code === 'KeyQ' && this.options.debug && !e.repeat) {
+        this.quake();
       }
     });
     on(window, 'keyup', (e) => {

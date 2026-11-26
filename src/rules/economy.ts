@@ -25,10 +25,10 @@ export class Economy {
     this.nextHotAt = this.holdTime();
   }
 
-  /** Spends one coin for a drop through `gate`; null when the bank is empty. */
-  tryDrop(gate: GateIndex): CoinTag | null {
-    if (this.coins <= 0) return null;
-    this.coins--;
+  /** Spends one coin for a drop through `gate` (nothing when `free`, as in fever); null when the bank is empty. */
+  tryDrop(gate: GateIndex, free = false): CoinTag | null {
+    if (!free && this.coins <= 0) return null;
+    if (!free) this.coins--;
     return { hot: gate === this.hotGate };
   }
 
@@ -36,9 +36,12 @@ export class Economy {
     this.coins += RULES.creditCoins;
   }
 
-  /** A coin pushed off the front edge: the coin comes back to the bank and scores. Returns the points won. */
-  frontExit(tag: CoinTag | null): number {
-    const won = RULES.pointsPerCoin * (tag?.hot ? RULES.hotMultiplier : 1);
+  /**
+   * A coin pushed off the front edge: the coin comes back to the bank and scores. `multiplier` is any extra (QUAKE
+   * fever). Returns the points won.
+   */
+  frontExit(tag: CoinTag | null, multiplier = 1): number {
+    const won = RULES.pointsPerCoin * (tag?.hot ? RULES.hotMultiplier : 1) * multiplier;
     this.coins++;
     this.points += won;
     return won;
