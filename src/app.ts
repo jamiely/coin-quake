@@ -160,7 +160,7 @@ export class Game {
       } else if (e.type === 'sideExit') {
         this.fx.loss(e.x);
       } else {
-        this.fx.land(e.x, e.z, e.speed);
+        this.fx.land(e.x, e.y, e.z, e.strength, e.hit);
         for (const pe of this.pressure.landing()) this.fx.pressure(pe);
       }
     }

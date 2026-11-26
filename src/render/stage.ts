@@ -44,6 +44,9 @@ const TIER_LOOK: Record<Tier, { bg: string; bulbs: [string, string]; chase: numb
  */
 const FIT = { halfWidth: 25, halfHeight: 46, centerY: 12, centerZ: -6, pitchDeg: 14, fov: 34 };
 
+/** Seconds a blasted coin's squash-and-wobble lasts. */
+const SQUASH_TIME = 0.35;
+
 export class Stage {
   readonly renderer: THREE.WebGLRenderer;
   readonly camera = new THREE.PerspectiveCamera(FIT.fov, 1, 5, 1000);
@@ -58,6 +61,11 @@ export class Stage {
   private readonly m = new THREE.Matrix4();
   private readonly scale = new THREE.Vector3(1, 1, 1);
   private readonly c = new THREE.Color();
+  private readonly p = new THREE.Vector3();
+  private readonly q = new THREE.Quaternion();
+  private readonly squash = new Map<number, number>();
+  private readonly squashAge = new Map<number, number>();
+  private lastRealTime = 0;
   private painted = '';
 
   constructor(private readonly container: HTMLElement) {
@@ -116,7 +124,8 @@ export class Stage {
 
   update(physics: PhysicsWorld, s: StageState, time: number, realTime: number): void {
     this.machine.pusher.position.z = physics.pusherFront - PUSHER.depth / 2;
-    this.syncCoins(physics);
+    this.syncCoins(physics, realTime - this.lastRealTime);
+    this.lastRealTime = realTime;
 
     const { carriage, bolt, claw, laser, gates } = this.machine;
     carriage.position.x = s.dropperX;
@@ -210,13 +219,37 @@ export class Stage {
     this.renderer.domElement.remove();
   }
 
-  private syncCoins(physics: PhysicsWorld): void {
+  /**
+   * Coin instances, with cartoon squash: a coin blasted by an impact flattens and widens, then springs back with a
+   * damped wobble over ~0.35 s (tracked by body handle, on real time so it plays through hit-stop).
+   */
+  private syncCoins(physics: PhysicsWorld, dt: number): void {
+    for (const [handle, k] of physics.blasted) this.squash.set(handle, Math.max(this.squash.get(handle) ?? 0, k));
+    physics.blasted.clear();
     const list = physics.coins;
     for (let i = 0; i < list.length; i++) {
       const b = list[i]!.body;
       const p = b.translation();
       const r = b.rotation();
-      this.m.compose(new THREE.Vector3(p.x, p.y, p.z), new THREE.Quaternion(r.x, r.y, r.z, r.w), this.scale);
+      const k = this.squash.get(b.handle);
+      if (k !== undefined) {
+        // Age runs 0 -> 1 over SQUASH_TIME; amount is k at impact, oscillating and decaying.
+        const age = (this.squashAge.get(b.handle) ?? 0) + dt;
+        const u = age / SQUASH_TIME;
+        if (u >= 1) {
+          this.squash.delete(b.handle);
+          this.squashAge.delete(b.handle);
+          this.scale.set(1, 1, 1);
+        } else {
+          this.squashAge.set(b.handle, age);
+          const a = 0.55 * k * Math.exp(-u * 4) * Math.cos(u * Math.PI * 3);
+          // Local Y is the coin's thickness axis: squash it, widen the face.
+          this.scale.set(1 + a * 0.5, 1 - a, 1 + a * 0.5);
+        }
+      }
+      this.q.set(r.x, r.y, r.z, r.w);
+      this.m.compose(this.p.set(p.x, p.y, p.z), this.q, this.scale);
+      this.scale.set(1, 1, 1);
       this.coins.setMatrixAt(i, this.m);
       this.coinOutlines.setMatrixAt(i, this.m);
     }

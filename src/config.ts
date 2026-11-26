@@ -9,8 +9,8 @@ export const SIM = {
   solverIterations: 2,
 };
 
-/** A chunky cartoon coin, flat on the tray (Rapier cylinders stand on the Y axis). */
-export const COIN = { radius: 1.5, halfThickness: 0.35, density: 7, friction: 0.45, restitution: 0.1 };
+/** A chunky cartoon coin, flat on the tray (Rapier cylinders stand on the Y axis); a little bounce so landings read. */
+export const COIN = { radius: 1.5, halfThickness: 0.35, density: 7, friction: 0.45, restitution: 0.32 };
 
 /** The lower tray: coins pushed past `front` fall off and pay; past the open corners they fall off the sides. */
 export const TRAY = {
@@ -31,6 +31,27 @@ export const PUSHER = {
   period: 2.6,
   /** The fixed wall above the shelf; coins on the shelf are scraped off its front as the pusher retracts. */
   scraperZ: -19,
+};
+
+/**
+ * Cartoon impacts (drama over realism). A dropped coin falls with extra gravity, and on landing it blasts the coins
+ * around it: an upward hop plus a radial push, weaker with distance. The sideways part is capped so the blast
+ * scatters the pile without throwing coins over the side rails.
+ */
+export const IMPACT = {
+  /** Extra downward acceleration on a dropped coin until it lands (cm/s², on top of GRAVITY). */
+  extraGravity: -1400,
+  /** Coins within this radius of the landing point are hit. */
+  radius: 7,
+  /** Upward speed given at the centre (cm/s), and the radial push. */
+  hop: 95,
+  push: 55,
+  /** Random spin given to hit coins (rad/s), so they flip and tumble. */
+  spin: 14,
+  /** Landing speed (cm/s) at which the blast is full strength; slower landings scale down. */
+  fullSpeed: 260,
+  /** Hits within this distance of a side rail get no outward push. */
+  railMargin: 4,
 };
 
 /** Hard cap on live coin bodies (measured: ~6 ms/step at 350 on an M-series Mac with the SIMD build). */

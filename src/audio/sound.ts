@@ -81,6 +81,25 @@ export class Sound {
     this.tone(f * 1.51, 0.06, 0.05 * (0.4 + intensity), 'sine');
   }
 
+  /**
+   * A dropped coin slamming into the pile: a pitch-varied low thud, a metal crash scaled by how many coins it hit,
+   * and a scatter of clinks for the blasted coins. `strength` 0..1.
+   */
+  slam(strength: number, hit: number): void {
+    const vary = 0.85 + Math.random() * 0.3;
+    this.tone(120 * vary, 0.16, 0.25 + 0.3 * strength, 'sine', 55 * vary);
+    this.noiseHit(0.08 + 0.1 * strength, 900 * vary, 0.18 + 0.2 * strength, 'lowpass');
+    this.noiseHit(0.12 + 0.12 * Math.min(1, hit / 6), 4500 * vary, 0.06 + 0.05 * Math.min(1, hit / 6), 'highpass', 0.005);
+    this.clink(0.6 + 0.4 * strength);
+    for (let i = 0; i < Math.min(3, Math.floor(hit / 2)); i++) this.delayedClink(0.03 + i * 0.045, 0.3 + 0.2 * strength);
+  }
+
+  private delayedClink(delay: number, intensity: number): void {
+    const f = 2400 + Math.random() * 1800;
+    this.tone(f, 0.08, 0.1 * intensity, 'triangle', undefined, delay);
+    this.tone(f * 1.51, 0.05, 0.04 * intensity, 'sine', undefined, delay);
+  }
+
   /** A front payout: a bright pickup on the combo ladder. Higher combos climb the scale. */
   payout(combo: number, hot: boolean): void {
     const step = Math.min(combo - 1, 24);

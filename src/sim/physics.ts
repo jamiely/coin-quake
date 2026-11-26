@@ -1,5 +1,5 @@
 import RAPIER from '@dimforge/rapier3d-simd-compat';
-import { COIN, DROPPER, GRAVITY, MAX_COINS, PUSHER, RULES, SIM, TRAY } from '../config';
+import { COIN, DROPPER, GRAVITY, IMPACT, MAX_COINS, PUSHER, RULES, SIM, TRAY } from '../config';
 import type { CoinTag } from '../rules/economy';
 import type { Rng } from '../rng';
 
@@ -30,7 +30,8 @@ export function firstEdge(a: { x: number; z: number }, b: { x: number; z: number
 export type SimEvent =
   | { type: 'frontExit'; tag: CoinTag | null; x: number }
   | { type: 'sideExit'; x: number }
-  | { type: 'landed'; x: number; z: number; speed: number };
+  /** A dropped coin hit the pile: `speed` at impact, `hit` how many coins it blasted, `strength` 0..1. */
+  | { type: 'landed'; x: number; y: number; z: number; speed: number; hit: number; strength: number };
 
 const EXIT_Y = -4;
 const SHELF_Y = PUSHER.height;
@@ -48,7 +49,10 @@ export class PhysicsWorld {
   private readonly pusher: RAPIER.RigidBody;
   private readonly coinShape = RAPIER.ColliderDesc.cylinder(COIN.halfThickness, COIN.radius);
   private time = 0;
-  private readonly falling = new Set<RAPIER.RigidBody>();
+  /** Dropped coins still in their first fall, with their fall speed last step (to detect the impact). */
+  private readonly falling = new Map<RAPIER.RigidBody, number>();
+  /** Bodies blasted by an impact this step, with their blast strength, for the renderer's squash. */
+  readonly blasted = new Map<number, number>();
 
   static async create(rng: Rng): Promise<PhysicsWorld> {
     await RAPIER.init();
@@ -83,7 +87,7 @@ export class PhysicsWorld {
     body.setLinvel({ x: 0, y: -80, z: 0 }, true);
     // A little wobble so coins land tilted and tumble, not as perfectly flat plates.
     body.setAngvel({ x: this.rng.range(-4, 4), y: 0, z: this.rng.range(-4, 4) }, true);
-    this.falling.add(body);
+    this.falling.set(body, 80);
     return true;
   }
 
@@ -94,6 +98,14 @@ export class PhysicsWorld {
     const phase = 0.5 - 0.5 * Math.cos((2 * Math.PI * this.time) / PUSHER.period);
     this.pusherFront = PUSHER.frontMin + (PUSHER.frontMax - PUSHER.frontMin) * phase;
     this.pusher.setNextKinematicTranslation({ x: 0, y: PUSHER.height / 2, z: this.pusherFront - PUSHER.depth / 2 });
+    // Cartoon gravity: dropped coins fall harder than physics would, so they slam into the pile.
+    const dv = IMPACT.extraGravity * this.world.timestep;
+    for (const body of this.falling.keys()) {
+      const v = body.linvel();
+      body.setLinvel({ x: v.x, y: v.y + dv, z: v.z }, true);
+    }
+    // `blasted` accumulates across steps until the renderer reads and clears it; cap it for headless runs.
+    if (this.blasted.size > MAX_COINS) this.blasted.clear();
     this.world.step();
     const events = this.classify();
     this.lastStepMs = performance.now() - t0;
@@ -105,10 +117,16 @@ export class PhysicsWorld {
     for (let i = this.coins.length - 1; i >= 0; i--) {
       const coin = this.coins[i]!;
       const p = coin.body.translation();
-      if (this.falling.has(coin.body) && p.y < SHELF_Y + 3) {
-        this.falling.delete(coin.body);
-        const v = coin.body.linvel();
-        events.push({ type: 'landed', x: p.x, z: p.z, speed: Math.hypot(v.x, v.y, v.z) });
+      const fallSpeed = this.falling.get(coin.body);
+      if (fallSpeed !== undefined) {
+        const vy = -coin.body.linvel().y;
+        // Landed: its fall was stopped this step (it hit the shelf, the pile or another coin) low enough to count.
+        if (p.y < SHELF_Y + 6 && vy < fallSpeed * 0.5) {
+          this.falling.delete(coin.body);
+          events.push(this.impact(coin.body, p, fallSpeed));
+        } else {
+          this.falling.set(coin.body, Math.max(vy, 0));
+        }
       }
       // The first boundary crossed decides; a coin that drifts past the other edge while falling keeps it. One that
       // only overhung an edge and was pushed back onto the tray starts over.
@@ -123,6 +141,36 @@ export class PhysicsWorld {
       this.coins.pop();
     }
     return events;
+  }
+
+  /**
+   * The landing blast: every coin within `IMPACT.radius` of the impact hops up and is pushed away from it, scaled by
+   * distance and by how hard the coin landed. Near a side rail the outward push is dropped, so blasts scatter the
+   * pile without dumping coins off the sides.
+   */
+  private impact(body: RAPIER.RigidBody, p: RAPIER.Vector, speed: number): SimEvent {
+    const strength = Math.min(1, speed / IMPACT.fullSpeed);
+    let hit = 0;
+    for (const other of this.coins) {
+      if (other.body === body) continue;
+      const q = other.body.translation();
+      const dx = q.x - p.x;
+      const dz = q.z - p.z;
+      const d = Math.hypot(dx, dz);
+      if (d > IMPACT.radius || Math.abs(q.y - p.y) > 4) continue;
+      const k = strength * (1 - d / IMPACT.radius);
+      const nx = d > 1e-3 ? dx / d : 0;
+      const nz = d > 1e-3 ? dz / d : 0;
+      const nearRail = TRAY.halfWidth - Math.abs(q.x) < IMPACT.railMargin && Math.sign(nx) === Math.sign(q.x);
+      const v = other.body.linvel();
+      other.body.setLinvel({ x: v.x + (nearRail ? 0 : nx * IMPACT.push * k), y: Math.max(v.y, 0) + IMPACT.hop * k, z: v.z + nz * IMPACT.push * k }, true);
+      other.body.setAngvel({ x: this.rng.range(-1, 1) * IMPACT.spin * k, y: this.rng.range(-1, 1) * IMPACT.spin * k, z: this.rng.range(-1, 1) * IMPACT.spin * k }, true);
+      this.blasted.set(other.body.handle, k);
+      hit++;
+    }
+    // The lander itself squashes and bounces a little.
+    this.blasted.set(body.handle, strength);
+    return { type: 'landed', x: p.x, y: p.y, z: p.z, speed, hit, strength };
   }
 
   private addCoin(x: number, y: number, z: number, tag: CoinTag | null): RAPIER.RigidBody {

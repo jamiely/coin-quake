@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { Sound } from './audio/sound';
-import { DROPPER, PUSHER, TRAY } from './config';
+import { DROPPER, TRAY } from './config';
 import { Celebration, Juice, Overlay, ParticlePool, PopupPool, type Recipe, type Weight } from './juice';
 import { PALETTE } from './render/toon';
 import type { PressureEvent, Tier } from './rules/pressure';
@@ -8,7 +8,7 @@ import type { PressureEvent, Tier } from './rules/pressure';
 /** Coin Quake's recipe table: every event at every weight (GAME_DESIGN.md §4.1). */
 export const RECIPES: Record<string, Partial<Record<Weight, Recipe>>> = {
   drop: { 1: { trauma: 0.1, kick: 0.35 } },
-  land: { 1: { trauma: 0.04 }, 2: { trauma: 0.08 } },
+  land: { 1: { trauma: 0.1 }, 2: { trauma: 0.2, kick: 0.4 }, 3: { trauma: 0.32, kick: 0.7, hitStop: 0.045 } },
   payout: {
     1: { trauma: 0.08, kick: 0.3 },
     2: { trauma: 0.14, kick: 0.5, flash: { color: '#ffe27a', opacity: 0.08, fade: 0.15 } },
@@ -64,11 +64,21 @@ export class Fx {
     if (hot) this.particles.burst({ at: { x, y: DROPPER.y - 3, z: DROPPER.z + 3 }, count: 14, color: PALETTE.hot, speed: 22, size: 0.7, life: 0.4 }, this.rand);
   }
 
-  land(x: number, z: number, speed: number): void {
-    const heavy = speed > 120;
-    this.juice.fire('land', heavy ? 2 : 1);
-    this.sound.clink(Math.min(1, speed / 200));
-    this.particles.burst({ at: { x, y: PUSHER.height + 0.6, z }, count: heavy ? 10 : 5, color: PALETTE.gold, speed: 18, dir: { x: 0, y: 1, z: 0 }, spread: 1.1, size: 0.55, life: 0.35 }, this.rand);
+  /**
+   * A dropped coin slamming into the pile: shake (and a hit-stop on hard hits), a heavy layered clink, a dust puff,
+   * a ring of sparks and a "CLANK!" for big blasts. `hit` is how many coins it blasted, `strength` 0..1.
+   */
+  land(x: number, y: number, z: number, strength: number, hit: number): void {
+    const weight: Weight = strength > 0.75 && hit >= 4 ? 3 : strength > 0.4 ? 2 : 1;
+    this.juice.fire('land', weight, { x: 0, y: -1 });
+    this.sound.slam(strength, hit);
+    const at = { x, y: y + 0.4, z };
+    // Puffy cartoon dust ring, low and wide.
+    this.particles.burst({ at, count: 8 + hit * 2, color: '#fff1d6', speed: 20 + 25 * strength, dir: { x: 0, y: 0.25, z: 0 }, spread: 1.45, size: 2.2, life: 0.55, gravity: 6, drag: 5 }, this.rand);
+    // Gold sparks spraying up and out.
+    this.particles.burst({ at, count: 10 + hit * 3, color: PALETTE.gold, speed: 35 + 45 * strength, dir: { x: 0, y: 1, z: 0 }, spread: 1.2, size: 0.6, life: 0.45, gravity: -80 }, this.rand);
+    this.particles.burst({ at, count: 6, color: '#ffffff', speed: 18, size: 1.1, life: 0.18, drag: 6 }, this.rand);
+    if (weight === 3) this.popups.show(this.rand() < 0.5 ? 'CLANK!' : 'BONK!', { x, y: y + 4, z }, { fill: '#fff1d6', ink: '#2b1533', size: 2.2, life: 0.55, rise: 8, tilt: 0.7 });
   }
 
   payout(x: number, won: number, combo: number, hot: boolean, fever: boolean): void {
