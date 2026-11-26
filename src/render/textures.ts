@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { INK, PALETTE } from './toon';
+import { INK } from './toon';
 
 function canvas(w: number, h: number): [HTMLCanvasElement, CanvasRenderingContext2D] {
   const c = document.createElement('canvas');
@@ -13,38 +13,6 @@ function texture(c: HTMLCanvasElement): THREE.CanvasTexture {
   t.colorSpace = THREE.SRGBColorSpace;
   t.anisotropy = 4;
   return t;
-}
-
-/** Coin face: gold disc with an inked rim, a raised star and a highlight glint. */
-export function coinFace(): THREE.CanvasTexture {
-  const [c, g] = canvas(128, 128);
-  g.fillStyle = PALETTE.gold;
-  g.fillRect(0, 0, 128, 128);
-  g.lineWidth = 8;
-  g.strokeStyle = PALETTE.goldDark;
-  g.beginPath();
-  g.arc(64, 64, 50, 0, Math.PI * 2);
-  g.stroke();
-  g.fillStyle = PALETTE.goldDark;
-  star(g, 64, 66, 30, 13);
-  g.fillStyle = '#fff4b8';
-  star(g, 62, 62, 26, 11);
-  g.fillStyle = 'rgba(255,255,255,0.85)';
-  g.beginPath();
-  g.ellipse(40, 34, 14, 6, -0.6, 0, Math.PI * 2);
-  g.fill();
-  return texture(c);
-}
-
-function star(g: CanvasRenderingContext2D, x: number, y: number, outer: number, inner: number): void {
-  g.beginPath();
-  for (let i = 0; i < 10; i++) {
-    const r = i % 2 ? inner : outer;
-    const a = -Math.PI / 2 + (i * Math.PI) / 5;
-    g.lineTo(x + r * Math.cos(a), y + r * Math.sin(a));
-  }
-  g.closePath();
-  g.fill();
 }
 
 /** Factory back wall: plum bricks, big silhouette gears and pipes, in flat cartoon colors. */

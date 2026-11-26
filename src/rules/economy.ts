@@ -32,6 +32,12 @@ export class Economy {
     return { hot: gate === this.hotGate };
   }
 
+  /** A prize (a figurine pushed off the front) pays `points`. Returns them. */
+  prize(points: number): number {
+    this.points += points;
+    return points;
+  }
+
   addCredits(): void {
     this.coins += RULES.creditCoins;
   }

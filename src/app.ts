@@ -1,5 +1,5 @@
 import { Sound } from './audio/sound';
-import { MAX_COINS, SIM } from './config';
+import { COIN_KINDS, FIGURINES, MAX_COINS, SIM } from './config';
 import { Fx } from './fx';
 import { Stage } from './render/stage';
 import { Trigger, dropperX, gateAt } from './rules/dropper';
@@ -27,6 +27,9 @@ export class Game {
   readonly perf = { frame: 0, physics: 0, render: 0, fps: 0 };
   private readonly trigger = new Trigger();
   private lastDropAt = -1;
+  private lastPayAt = -Infinity;
+  private lastPrizeAt = -Infinity;
+  private lastLossAt = -Infinity;
   /** The current button gesture was used by a celebration; ignore it until released. */
   private swallowed = false;
   private acc = 0;
@@ -105,6 +108,11 @@ export class Game {
     for (const e of this.pressure.quake()) this.fx.pressure(e);
   }
 
+  /** Debug: a coin dump now. */
+  dump(): void {
+    this.physics.dumpSoon();
+  }
+
   /** Debug stress preset: fill the machine to the body cap. */
   stress(): void {
     for (let i = 0; this.physics.coins.length < MAX_COINS && i < MAX_COINS; i++) {
@@ -141,31 +149,46 @@ export class Game {
       const fever = this.pressure.inFever;
       const tag = this.economy.tryDrop(gateAt(x), fever);
       if (tag) {
-        if (this.physics.drop(x, tag)) {
+        const kind = this.physics.drop(x, tag);
+        if (kind) {
           this.lastDropAt = this.simTime;
-          this.fx.drop(x, tag.hot);
+          this.fx.drop(x, tag.hot, kind);
         } else if (!fever) {
           this.economy.coins++; // body cap: refund
         }
       }
     }
     for (const e of this.physics.step()) {
-      if (e.type === 'frontExit') {
+      if (e.type === 'frontExit' && e.figurine) {
+        // A prize figurine over the edge: the big prize moment.
+        this.lastPrizeAt = this.simTime;
+        const won = this.economy.prize(FIGURINES.points * this.pressure.multiplier);
+        this.fx.prize(e.x, e.figurine, won);
+        for (const pe of this.pressure.machine(20)) this.fx.pressure(pe);
+      } else if (e.type === 'frontExit') {
+        this.lastPayAt = this.simTime;
         const hot = Boolean(e.tag?.hot);
         const fever = this.pressure.inFever;
-        const won = this.economy.frontExit(e.tag, this.pressure.multiplier);
+        const won = this.economy.frontExit(e.tag, this.pressure.multiplier * COIN_KINDS[e.kind].value);
         const events = this.pressure.payout(hot);
-        this.fx.payout(e.x, won, this.pressure.combo, hot, fever);
+        this.fx.payout(e.x, won, this.pressure.combo, hot, fever, e.kind);
         for (const pe of events) this.fx.pressure(pe);
       } else if (e.type === 'sideExit') {
+        this.lastLossAt = this.simTime;
         this.fx.loss(e.x);
       } else if (e.type === 'landed') {
-        this.fx.land(e.x, e.y, e.z, e.strength, e.hit);
+        this.fx.land(e.x, e.y, e.z, e.strength, e.hit, e.kind);
         for (const pe of this.pressure.landing()) this.fx.pressure(pe);
+      } else if (e.type === 'dumpWarning') {
+        this.fx.dumpWarning(e.in);
+      } else if (e.type === 'dump') {
+        this.fx.dump(e.count);
       } else {
         // The Works: every hit on the machinery reacts, and builds a little pressure.
         this.fx.works(e);
-        for (const pe of this.pressure.machine(e.type === 'bonus' ? 6 : 0.4)) this.fx.pressure(pe);
+        // Pegs ping ~10 times per coin, so they barely count; the gear, loop, flippers and zaps a little; BONUS a lot.
+        const gain = e.type === 'bonus' ? 6 : e.type === 'peg' ? 0.02 : e.type === 'loopIn' ? 0 : 0.15;
+        if (gain) for (const pe of this.pressure.machine(gain)) this.fx.pressure(pe);
       }
     }
   }
@@ -200,6 +223,9 @@ export class Game {
         fever: this.pressure.fever,
         combo: this.pressure.combo,
         cheering: this.fx.celebration.active,
+        sincePayout: this.simTime - this.lastPayAt,
+        sincePrize: this.simTime - this.lastPrizeAt,
+        sinceLoss: this.simTime - this.lastLossAt,
       },
       this.simTime,
       now / 1000,

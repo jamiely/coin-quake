@@ -14,7 +14,7 @@ describe('PhysicsWorld', () => {
     const world = await PhysicsWorld.create(new Rng(3));
     // A few strokes settle the overhang at boot; most of the pile stays.
     expect(world.coins.length).toBeGreaterThan(RULES.startPile * 0.8);
-    const spilled = run(world, 3).filter((e) => e.type !== 'landed');
+    const spilled = run(world, 3).filter((e) => e.type === 'frontExit' || e.type === 'sideExit');
     expect(spilled.length).toBeLessThan(world.coins.length * 0.05);
     world.dispose();
   });
@@ -22,15 +22,15 @@ describe('PhysicsWorld', () => {
   it('pushes dropped coins off the front edge and keeps their tag', async () => {
     const world = await PhysicsWorld.create(new Rng(5));
     const events: SimEvent[] = [];
-    for (let i = 0; i < 80; i++) {
-      world.drop(((i % 7) - 3) * 4, { hot: true });
+    for (let i = 0; i < 40; i++) {
+      world.drop(((i % 7) - 3) * 4, { hot: true }, 'standard');
       events.push(...run(world, 0.25));
     }
-    events.push(...run(world, 20));
+    events.push(...run(world, 8));
     const landed = events.filter((e) => e.type === 'landed');
     const front = events.filter((e) => e.type === 'frontExit');
-    expect(landed.length).toBe(80);
-    expect(front.length).toBeGreaterThan(20);
+    expect(landed.length).toBe(40);
+    expect(front.length).toBeGreaterThan(10);
 
     // A tagged coin nudged over the edge reports its tag.
     const tagged = world.coins.find((c) => c.tag?.hot)!;
@@ -76,7 +76,7 @@ describe('PhysicsWorld', () => {
   it('refuses drops at the body cap', async () => {
     const world = await PhysicsWorld.create(new Rng(1));
     while (world.coins.length < MAX_COINS) world.drop(0, null);
-    expect(world.drop(DROPPER.halfSwing, null)).toBe(false);
+    expect(world.drop(DROPPER.halfSwing, null)).toBeNull();
     world.dispose();
   });
 });

@@ -3,14 +3,15 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
-import { COIN, DROPPER, GATES, MAX_COINS, PUSHER, type GateIndex } from '../config';
+import { DROPPER, GATES, PUSHER, type GateIndex } from '../config';
 import type { Juice } from '../juice';
 import type { Tier } from '../rules/pressure';
 import type { PhysicsWorld } from '../sim/physics';
 import { gaugeAngle, paintCounter, buildMachine, type Machine } from './machine';
 import { WorksView } from './works';
-import { coinFace } from './textures';
-import { PALETTE, fatten, outlineMat, toon } from './toon';
+import { Characters } from './characters';
+import { CoinsView } from './coins';
+import { PALETTE } from './toon';
 
 /** What the stage draws each frame; it reads these and never mutates game state. */
 export interface StageState {
@@ -29,6 +30,10 @@ export interface StageState {
   combo: number;
   /** A celebration is playing: Bolt cheers. */
   cheering: boolean;
+  /** Seconds since the last front payout, prize and side loss, for the characters' reactions. */
+  sincePayout: number;
+  sincePrize: number;
+  sinceLoss: number;
 }
 
 /** Background, marquee and chase speed per pressure tier (GAME_DESIGN.md §4.3). */
@@ -45,8 +50,6 @@ const TIER_LOOK: Record<Tier, { bg: string; bulbs: [string, string]; chase: numb
  */
 const FIT = { halfWidth: 25, halfHeight: 46, centerY: 12, centerZ: -6, pitchDeg: 14, fov: 34 };
 
-/** Seconds a blasted coin's squash-and-wobble lasts. */
-const SQUASH_TIME = 0.35;
 
 export class Stage {
   readonly renderer: THREE.WebGLRenderer;
@@ -57,17 +60,17 @@ export class Stage {
   readonly lookAt = new THREE.Vector3(0, FIT.centerY, FIT.centerZ);
   private readonly composer: EffectComposer;
   private readonly machine: Machine;
-  private readonly coins: THREE.InstancedMesh;
-  private readonly coinOutlines: THREE.InstancedMesh;
-  private readonly m = new THREE.Matrix4();
-  private readonly scale = new THREE.Vector3(1, 1, 1);
+  private readonly coins: CoinsView;
+  private readonly cast: Characters;
+  private lastStroke = 0;
   private readonly c = new THREE.Color();
-  private readonly p = new THREE.Vector3();
-  private readonly q = new THREE.Quaternion();
-  private readonly squash = new Map<number, number>();
-  private readonly squashAge = new Map<number, number>();
   private lastRealTime = 0;
   private painted = '';
+  private shownPoints = 0;
+  private counterTime = 0;
+  private lastDigits = '00000000';
+  private readonly digitAge = new Array<number>(8).fill(9);
+  private readonly digitBounce = new Array<number>(8).fill(0);
 
   private works: WorksView | null = null;
 
@@ -86,17 +89,8 @@ export class Stage {
 
     this.machine = buildMachine(this.scene);
 
-    const face = coinFace();
-    const coinGeo = new THREE.CylinderGeometry(COIN.radius, COIN.radius, 2 * COIN.halfThickness, 28);
-    const rim = toon(PALETTE.goldDark);
-    const top = toon('#ffffff', { map: face, emissive: PALETTE.gold, emissiveIntensity: 0.12 });
-    this.coins = new THREE.InstancedMesh(coinGeo, [rim, top, top], MAX_COINS);
-    this.coinOutlines = new THREE.InstancedMesh(fatten(coinGeo, 0.16), outlineMat(), MAX_COINS);
-    for (const mesh of [this.coins, this.coinOutlines]) {
-      mesh.frustumCulled = false;
-      mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-      this.scene.add(mesh);
-    }
+    this.coins = new CoinsView(this.scene);
+    this.cast = new Characters(this.scene, this.machine.pusher, this.machine.gauge.group);
 
     this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
@@ -129,7 +123,7 @@ export class Stage {
     this.machine.pusher.position.z = physics.pusherFront - PUSHER.depth / 2;
     this.works ??= new WorksView(this.scene, physics.works.pegs.length);
     this.works.update(physics.works, realTime);
-    this.syncCoins(physics, realTime - this.lastRealTime);
+    this.coins.update(physics, realTime - this.lastRealTime, realTime);
     this.lastRealTime = realTime;
 
     const { carriage, bolt, claw, laser, gates } = this.machine;
@@ -162,14 +156,45 @@ export class Stage {
       gate.hot.scale.setScalar(1 + 0.06 * Math.sin(time * 12));
     });
 
+    // Counter: rolls up toward the score (fast for big jumps), and each digit that ticks jumps and wobbles.
+    const dt = Math.max(0, realTime - this.counterTime);
+    this.counterTime = realTime;
+    const gap = s.points - this.shownPoints;
+    if (gap > 0) this.shownPoints = Math.min(s.points, this.shownPoints + Math.max(1, Math.ceil(gap * Math.min(1, dt * 6)), Math.ceil(40 * dt * 10)));
+    else this.shownPoints = s.points;
+    const digits = String(Math.min(this.shownPoints, 99_999_999)).padStart(8, '0');
+    let bouncing = false;
+    for (let i = 0; i < 8; i++) {
+      if (digits[i] !== this.lastDigits[i]) this.digitAge[i] = 0;
+      else this.digitAge[i]! += dt;
+      const a = this.digitAge[i]!;
+      this.digitBounce[i] = a < 0.35 ? Math.exp(-a * 9) * Math.abs(Math.cos(a * 28)) : 0;
+      if (this.digitBounce[i]! > 0.01) bouncing = true;
+    }
+    this.lastDigits = digits;
     const label = `HOT: ${GATES[s.hotGate]} x2`;
-    const key = `${s.points}|${s.coins}|${label}`;
-    if (key !== this.painted) {
+    const key = `${this.shownPoints}|${s.coins}|${label}`;
+    if (key !== this.painted || bouncing) {
       this.painted = key;
-      paintCounter(this.machine.counter.ctx, s.points, s.coins, label);
+      paintCounter(this.machine.counter.ctx, this.shownPoints, s.coins, label, this.digitBounce);
       this.machine.counter.texture.needsUpdate = true;
     }
     this.animateLights(s, realTime);
+    const stroke = (physics.pusherFront - PUSHER.frontMin) / (PUSHER.frontMax - PUSHER.frontMin);
+    this.cast.update(
+      {
+        pressure: s.pressure,
+        fever: s.fever > 0,
+        cheering: s.cheering,
+        sincePayout: s.sincePayout,
+        sincePrize: s.sincePrize,
+        sinceLoss: s.sinceLoss,
+        stroke,
+        forward: stroke > this.lastStroke,
+      },
+      realTime,
+    );
+    this.lastStroke = stroke;
     // Gauge: needle follows pressure with a nervous tremble that grows with it.
     const tremble = (s.pressure / 100) ** 2 * 0.08 * Math.sin(realTime * 47) + (s.fever > 0 ? 0.15 * Math.sin(realTime * 31) : 0);
     this.machine.gauge.needle.rotation.z = gaugeAngle(s.pressure) + tremble;
@@ -224,41 +249,4 @@ export class Stage {
     this.renderer.domElement.remove();
   }
 
-  /**
-   * Coin instances, with cartoon squash: a coin blasted by an impact flattens and widens, then springs back with a
-   * damped wobble over ~0.35 s (tracked by body handle, on real time so it plays through hit-stop).
-   */
-  private syncCoins(physics: PhysicsWorld, dt: number): void {
-    for (const [handle, k] of physics.blasted) this.squash.set(handle, Math.max(this.squash.get(handle) ?? 0, k));
-    physics.blasted.clear();
-    const list = physics.coins;
-    for (let i = 0; i < list.length; i++) {
-      const b = list[i]!.body;
-      const p = b.translation();
-      const r = b.rotation();
-      const k = this.squash.get(b.handle);
-      if (k !== undefined) {
-        // Age runs 0 -> 1 over SQUASH_TIME; amount is k at impact, oscillating and decaying.
-        const age = (this.squashAge.get(b.handle) ?? 0) + dt;
-        const u = age / SQUASH_TIME;
-        if (u >= 1) {
-          this.squash.delete(b.handle);
-          this.squashAge.delete(b.handle);
-          this.scale.set(1, 1, 1);
-        } else {
-          this.squashAge.set(b.handle, age);
-          const a = 0.55 * k * Math.exp(-u * 4) * Math.cos(u * Math.PI * 3);
-          // Local Y is the coin's thickness axis: squash it, widen the face.
-          this.scale.set(1 + a * 0.5, 1 - a, 1 + a * 0.5);
-        }
-      }
-      this.q.set(r.x, r.y, r.z, r.w);
-      this.m.compose(this.p.set(p.x, p.y, p.z), this.q, this.scale);
-      this.scale.set(1, 1, 1);
-      this.coins.setMatrixAt(i, this.m);
-      this.coinOutlines.setMatrixAt(i, this.m);
-    }
-    this.coins.count = this.coinOutlines.count = list.length;
-    this.coins.instanceMatrix.needsUpdate = this.coinOutlines.instanceMatrix.needsUpdate = true;
-  }
 }

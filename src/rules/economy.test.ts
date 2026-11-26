@@ -40,6 +40,14 @@ describe('Economy', () => {
     expect(e.coins).toBe(before + 1);
   });
 
+  it('pays prizes in points without touching the bank', () => {
+    const e = new Economy(new Rng(1));
+    const coins = e.coins;
+    expect(e.prize(250)).toBe(250);
+    expect(e.points).toBe(250);
+    expect(e.coins).toBe(coins);
+  });
+
   it('adds one credit batch per press', () => {
     const e = new Economy(new Rng(1));
     const before = e.coins;

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { Sound } from './audio/sound';
-import { DROPPER, TRAY, WORKS } from './config';
+import { COIN_KINDS, DROPPER, TRAY, WORKS, type CoinKind } from './config';
 import { Celebration, Juice, Overlay, ParticlePool, PopupPool, type Recipe, type Weight } from './juice';
 import { PALETTE } from './render/toon';
 import type { PressureEvent, Tier } from './rules/pressure';
@@ -33,7 +33,14 @@ export const RECIPES: Record<string, Partial<Record<Weight, Recipe>>> = {
   celebrate: { 5: { trauma: 0.8, hitStop: 0.12, punch: -5, flash: { color: '#fff1a8', opacity: 0.8, fade: 0.7 }, slowMo: { scale: 0.35, hold: 0.8 } } },
   firework: { 1: { trauma: 0.12, flash: { color: '#ffffff', opacity: 0.06, fade: 0.2 } } },
   credit: { 1: { trauma: 0.15, flash: { color: '#ffd84a', opacity: 0.2, fade: 0.3 } } },
+  prize: { 3: { trauma: 0.6, hitStop: 0.12, punch: -4, flash: { color: '#fff1a8', opacity: 0.55, fade: 0.4 }, slowMo: { scale: 0.4, hold: 0.35 } } },
+  dumpWarning: { 1: { trauma: 0.2, flash: { color: '#ff3d2e', opacity: 0.15, fade: 0.3 } } },
+  dump: { 4: { trauma: 0.85, hitStop: 0.08, punch: -4, kick: 1.2, flash: { color: '#fff1d6', opacity: 0.4, fade: 0.35 } } },
 };
+
+const RAINBOW = ['#ff4d6d', '#ffa53d', '#ffe14a', '#5fe07a', '#4dc3ff', '#a77bff'];
+const KIND_LABEL: Partial<Record<CoinKind, string>> = { jumbo: 'JUMBO!', lead: 'HEAVY!', gold: 'GOLD!', rainbow: 'RAINBOW!!' };
+const FIGURINE_NAMES: Record<string, string> = { critter: 'GEAR CRITTER', professor: 'MINI PROFESSOR', bolt: 'BOLT TOY', duck: 'BRASS DUCK' };
 
 /** Constant micro-shake per pressure tier (Hot and Critical rattle), and much more during fever. */
 const RUMBLE: Record<Tier, number> = { 0: 0, 1: 0, 2: 0.12, 3: 0.2 };
@@ -49,6 +56,11 @@ export class Fx {
   /** Points won during the current fever, for the tally. */
   feverPoints = 0;
   private volleys: { at: number; side: number }[] = [];
+  /** Seconds of dump-warning rumble left. */
+  private dumpRumble = 0;
+  private pendingWon = 0;
+  private lastPayPopup = -1;
+  private lastComboPopup = -1;
   private clock = 0;
   private readonly v = new THREE.Vector3();
 
@@ -63,9 +75,12 @@ export class Fx {
     this.celebration = new Celebration(parent);
   }
 
-  drop(x: number, hot: boolean): void {
+  drop(x: number, hot: boolean, kind: CoinKind = 'standard'): void {
     this.juice.fire('drop', 1, { x: 0, y: 1 });
     this.sound.drop(hot);
+    // Special coins announce themselves as they leave the claw.
+    const label = KIND_LABEL[kind];
+    if (label) this.popups.show(label, { x, y: DROPPER.y - 6, z: DROPPER.z + 5 }, { fill: COIN_KINDS[kind].face, ink: '#2b1533', size: 2, life: 0.7, rise: 2, tilt: 0.4 });
     // Claw steam puff and a spark from the laser tip.
     this.particles.burst({ at: { x, y: DROPPER.y - 1, z: DROPPER.z }, count: 10, color: '#ffffff', speed: 14, size: 1.4, life: 0.45, gravity: 8, drag: 4 }, this.rand);
     if (hot) this.particles.burst({ at: { x, y: DROPPER.y - 3, z: DROPPER.z + 3 }, count: 14, color: PALETTE.hot, speed: 22, size: 0.7, life: 0.4 }, this.rand);
@@ -75,10 +90,10 @@ export class Fx {
    * A dropped coin slamming into the pile: shake (and a hit-stop on hard hits), a heavy layered clink, a dust puff,
    * a ring of sparks and a "CLANK!" for big blasts. `hit` is how many coins it blasted, `strength` 0..1.
    */
-  land(x: number, y: number, z: number, strength: number, hit: number): void {
+  land(x: number, y: number, z: number, strength: number, hit: number, kind: CoinKind = 'standard'): void {
     const weight: Weight = strength > 0.75 && hit >= 4 ? 3 : strength > 0.4 ? 2 : 1;
     this.juice.fire('land', weight, { x: 0, y: -1 });
-    this.sound.slam(strength, hit);
+    this.sound.slam(strength, hit, COIN_KINDS[kind].pitch);
     const at = { x, y: y + 0.4, z };
     // Puffy cartoon dust ring, low and wide.
     this.particles.burst({ at, count: 8 + hit * 2, color: '#fff1d6', speed: 20 + 25 * strength, dir: { x: 0, y: 0.25, z: 0 }, spread: 1.45, size: 2.2, life: 0.55, gravity: 6, drag: 5 }, this.rand);
@@ -88,17 +103,31 @@ export class Fx {
     if (weight === 3) this.popups.show(this.rand() < 0.5 ? 'CLANK!' : 'BONK!', { x, y: y + 4, z }, { fill: '#fff1d6', ink: '#2b1533', size: 2.2, life: 0.55, rise: 8, tilt: 0.7 });
   }
 
-  payout(x: number, won: number, combo: number, hot: boolean, fever: boolean): void {
+  payout(x: number, won: number, combo: number, hot: boolean, fever: boolean, kind: CoinKind = 'standard'): void {
     if (fever) this.feverPoints += won;
-    const big = hot || fever || combo >= 5;
+    const bonus = COIN_KINDS[kind].value >= 5;
+    const big = hot || fever || combo >= 5 || bonus;
     this.juice.fire('payout', big ? 2 : 1, { x: x / TRAY.halfWidth, y: -1 });
-    this.sound.payout(combo, hot);
+    this.sound.payout(combo, hot, COIN_KINDS[kind].pitch, bonus);
     const at = this.v.set(x, -1, TRAY.front + 2);
-    // A gold fountain spraying up out of the chute, bigger with the combo.
-    this.particles.burst({ at, count: 8 + Math.min(combo, 20), color: fever ? '#ff7af0' : PALETTE.gold, speed: 32 + combo, dir: { x: 0, y: 1, z: 0.5 }, spread: 0.6, size: 0.8, life: 0.6, gravity: -90, shape: 'chip', spin: true }, this.rand);
+    // A gold fountain spraying up out of the chute, bigger with the combo; rainbow coins spray every colour.
+    const color = kind === 'rainbow' ? RAINBOW[combo % RAINBOW.length]! : fever ? '#ff7af0' : COIN_KINDS[kind].face;
+    this.particles.burst({ at, count: 8 + Math.min(combo, 20) + (bonus ? 20 : 0), color, speed: 32 + combo, dir: { x: 0, y: 1, z: 0.5 }, spread: 0.6, size: 0.8, life: 0.6, gravity: -90, shape: 'chip', spin: true }, this.rand);
     this.particles.burst({ at, count: 6, color: '#fff6c0', speed: 20, size: 0.9, life: 0.3 }, this.rand);
-    this.popups.show(`+${won}`, { x, y: 2, z: TRAY.front + 3 }, { fill: hot ? '#ffb02e' : fever ? '#ff7af0' : PALETTE.gold, ink: '#2b1533', size: 2.4 + Math.min(combo, 10) * 0.12, rise: 9 });
-    if (combo >= 3) this.popups.show(`COMBO x${combo}`, { x: 0, y: 12, z: TRAY.front - 4 }, { fill: TIER_COLORS[Math.min(3, Math.floor(combo / 5)) as Tier], ink: '#2b1533', size: 3 + Math.min(combo, 25) * 0.06, life: 0.7, rise: 3, tilt: 0.4 });
+    // Sparkle shower along the front edge: glints raining down the chute face.
+    this.particles.burst({ at: { x, y: 0.5, z: TRAY.front + 1 }, count: 10 + Math.min(combo, 12), color: '#fffbe0', speed: 12, dir: { x: 0, y: -1, z: 0.3 }, spread: 1.2, size: 0.45, life: 0.7, gravity: -30, drag: 1.5 }, this.rand);
+    if (kind === 'rainbow') for (const c of RAINBOW) this.particles.burst({ at, count: 6, color: c, speed: 50, dir: { x: 0, y: 1, z: 0.4 }, spread: 0.8, size: 0.7, life: 0.7, shape: 'chip', spin: true }, this.rand);
+    // In a fast chain the "+N" popups merge: one popup at most every 0.15 s shows everything won since the last.
+    this.pendingWon += won;
+    if (this.clock - this.lastPayPopup >= 0.15 || bonus || hot) {
+      this.popups.show(`+${this.pendingWon}`, { x, y: 2, z: TRAY.front + 3 }, { fill: hot ? '#ffb02e' : fever ? '#ff7af0' : bonus ? COIN_KINDS[kind].face : PALETTE.gold, ink: '#2b1533', size: 2.4 + Math.min(combo, 10) * 0.12, rise: 9 });
+      this.pendingWon = 0;
+      this.lastPayPopup = this.clock;
+    }
+    if (combo >= 3 && this.clock - this.lastComboPopup >= 0.3) {
+      this.lastComboPopup = this.clock;
+      this.popups.show(`COMBO x${combo}`, { x: 0, y: 12, z: TRAY.front - 4 }, { fill: TIER_COLORS[Math.min(3, Math.floor(combo / 5)) as Tier], ink: '#2b1533', size: 3 + Math.min(combo, 25) * 0.06, life: 0.7, rise: 3, tilt: 0.4 });
+    }
   }
 
   /** The Works: every machine part a coin touches reacts with sparks, a sound and sometimes a word. */
@@ -154,6 +183,39 @@ export class Fx {
     this.particles.burst({ at: { x: Math.sign(x) * (TRAY.halfWidth + 1), y: -2, z: TRAY.front - 2 }, count: 12, color: '#bba9c9', speed: 8, size: 2, life: 0.8, gravity: 10, drag: 3 }, this.rand);
   }
 
+  /**
+   * A prize figurine pushed off the front: the big prize moment. Freeze, flash, a confetti and gold burst, a prize
+   * popup naming the toy, and a squeaky fanfare.
+   */
+  prize(x: number, figurine: string, won: number): void {
+    this.juice.fire('prize', 3);
+    this.sound.prize();
+    this.confetti(220);
+    const at = { x, y: -1, z: TRAY.front + 2 };
+    this.particles.burst({ at, count: 80, color: PALETTE.gold, speed: 70, dir: { x: 0, y: 1, z: 0.4 }, spread: 0.7, size: 1, life: 0.9, gravity: -70, shape: 'chip', spin: true }, this.rand);
+    this.particles.burst({ at, count: 40, color: '#ffffff', speed: 45, size: 1.2, life: 0.4, drag: 4 }, this.rand);
+    this.volley(2, 0.6);
+    this.overlay.titleCard('PRIZE!', PALETTE.gold, `${FIGURINE_NAMES[figurine] ?? 'FIGURINE'} +${won}`, 1.3, 3);
+  }
+
+  /** A coin dump is coming: siren, flashing warning, rumble. */
+  dumpWarning(seconds: number): void {
+    this.sound.siren(seconds);
+    this.juice.fire('dumpWarning');
+    this.overlay.titleCard('COIN DUMP!', '#ffd84a', 'INCOMING', seconds, 2);
+    this.dumpRumble = seconds;
+  }
+
+  /** The dump lands: a huge crash, shake, a dust cloud across the tray, and a counted popup. */
+  dump(count: number): void {
+    this.juice.fire('dump', 4);
+    this.sound.avalanche();
+    for (let i = 0; i < 6; i++) {
+      this.particles.burst({ at: { x: -15 + i * 6, y: 3, z: 3 }, count: 14, color: '#fff1d6', speed: 30, dir: { x: 0, y: 0.4, z: 0 }, spread: 1.4, size: 2.6, life: 0.8, gravity: 6, drag: 3 }, this.rand);
+    }
+    this.popups.show(`+${count} COINS!`, { x: 0, y: 12, z: 6 }, { fill: PALETTE.gold, ink: '#2b1533', size: 4, life: 1.3, rise: 4, tilt: 0.3 });
+  }
+
   credit(): void {
     this.juice.fire('credit');
     this.sound.credit();
@@ -198,7 +260,7 @@ export class Fx {
 
   /** Sets the pressure-driven rumble; fever shakes hard all the time. */
   setRumble(tier: Tier, fever: boolean): void {
-    this.juice.rumble = fever ? 0.32 : RUMBLE[tier];
+    this.juice.rumble = Math.max(fever ? 0.32 : RUMBLE[tier], this.dumpRumble > 0 ? 0.28 : 0);
   }
 
   /**
@@ -230,6 +292,7 @@ export class Fx {
 
   update(realDt: number, camera: THREE.Camera): void {
     this.clock += realDt;
+    this.dumpRumble = Math.max(0, this.dumpRumble - realDt);
     for (let i = this.volleys.length - 1; i >= 0; i--) {
       const v = this.volleys[i]!;
       if (v.at > this.clock) continue;

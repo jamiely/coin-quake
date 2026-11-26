@@ -66,8 +66,8 @@ export class Sound {
     if (hot) this.noiseHit(0.25, 5200, 0.1, 'highpass', 0.03);
   }
 
-  /** A coin landing; `intensity` 0..1. Throttled so a pile does not roar. */
-  clink(intensity: number): void {
+  /** A coin landing; `intensity` 0..1, `pitch` scales it by coin kind (dimes ring high, lead thuds). Throttled. */
+  clink(intensity: number, pitch = 1): void {
     const ctx = this.ctx;
     if (!ctx) return;
     const now = ctx.currentTime;
@@ -76,7 +76,7 @@ export class Sound {
       this.clinksInWindow = 0;
     }
     if (++this.clinksInWindow > 6) return;
-    const f = 2600 + Math.random() * 1600;
+    const f = (2600 + Math.random() * 1600) * pitch;
     this.tone(f, 0.09, 0.12 * (0.4 + intensity), 'triangle');
     this.tone(f * 1.51, 0.06, 0.05 * (0.4 + intensity), 'sine');
   }
@@ -85,12 +85,12 @@ export class Sound {
    * A dropped coin slamming into the pile: a pitch-varied low thud, a metal crash scaled by how many coins it hit,
    * and a scatter of clinks for the blasted coins. `strength` 0..1.
    */
-  slam(strength: number, hit: number): void {
-    const vary = 0.85 + Math.random() * 0.3;
+  slam(strength: number, hit: number, pitch = 1): void {
+    const vary = (0.85 + Math.random() * 0.3) * pitch;
     this.tone(120 * vary, 0.16, 0.25 + 0.3 * strength, 'sine', 55 * vary);
     this.noiseHit(0.08 + 0.1 * strength, 900 * vary, 0.18 + 0.2 * strength, 'lowpass');
     this.noiseHit(0.12 + 0.12 * Math.min(1, hit / 6), 4500 * vary, 0.06 + 0.05 * Math.min(1, hit / 6), 'highpass', 0.005);
-    this.clink(0.6 + 0.4 * strength);
+    this.clink(0.6 + 0.4 * strength, pitch);
     for (let i = 0; i < Math.min(3, Math.floor(hit / 2)); i++) this.delayedClink(0.03 + i * 0.045, 0.3 + 0.2 * strength);
   }
 
@@ -133,14 +133,49 @@ export class Sound {
     this.noiseHit(0.06, 9000, 0.08, 'highpass', 0.05);
   }
 
-  /** A front payout: a bright pickup on the combo ladder. Higher combos climb the scale. */
-  payout(combo: number, hot: boolean): void {
+  /**
+   * A front payout: a chunky coin clink (body thunk plus a bright metal ring, at the coin's pitch) climbing a
+   * semitone with each coin in the chain, over a pickup chime on the combo ladder. Bonus coins add a sparkle.
+   */
+  payout(combo: number, hot: boolean, pitch = 1, bonus = false): void {
     const step = Math.min(combo - 1, 24);
+    const climb = 2 ** (Math.min(combo - 1, 18) / 12);
+    const ring = 1900 * pitch * climb * (0.98 + Math.random() * 0.04);
+    this.tone(180 * pitch, 0.07, 0.22, 'sine', 90 * pitch);
+    this.noiseHit(0.04, 3200 * pitch, 0.12, 'bandpass');
+    this.tone(ring, 0.22, 0.11, 'triangle');
+    this.tone(ring * 2.76, 0.14, 0.035, 'sine');
     const semis = 12 * Math.floor(step / 5) + PENTATONIC[step % 5]!;
     const f = 660 * 2 ** (semis / 12);
-    this.tone(f, 0.12, 0.2, 'square', f * 1.02);
-    this.tone(f * 2, 0.09, 0.08, 'sine');
-    if (hot) this.tone(f * 1.5, 0.16, 0.12, 'sawtooth', f * 1.6);
+    this.tone(f, 0.12, 0.13, 'square', f * 1.02, 0.02);
+    this.tone(f * 2, 0.09, 0.06, 'sine', undefined, 0.02);
+    if (hot) this.tone(f * 1.5, 0.16, 0.1, 'sawtooth', f * 1.6, 0.02);
+    if (bonus) for (let i = 0; i < 4; i++) this.tone(2600 * 2 ** (PENTATONIC[i]! / 12), 0.09, 0.05, 'sine', undefined, 0.05 + i * 0.04);
+  }
+
+  /** A prize figurine over the edge: a squeaky-toy honk, a gong and a rising fanfare stab. */
+  prize(): void {
+    this.tone(620, 0.12, 0.16, 'square', 980);
+    this.tone(980, 0.14, 0.12, 'square', 520, 0.12);
+    this.tone(80, 1.2, 0.4, 'sine', 70, 0.05);
+    this.noiseHit(1.2, 1400, 0.12, 'bandpass', 0.05);
+    [0, 4, 7, 12, 16].forEach((s, i) => this.tone(523 * 2 ** (s / 12), 0.2, 0.12, 'sawtooth', undefined, 0.25 + i * 0.07));
+  }
+
+  /** Dump siren: a two-tone warble rising, about `seconds` long. */
+  siren(seconds: number): void {
+    for (let t = 0; t < seconds; t += 0.4) {
+      this.tone(660, 0.2, 0.09, 'square', 880, t);
+      this.tone(880, 0.2, 0.09, 'square', 660, t + 0.2);
+    }
+  }
+
+  /** The dump crashing down: a deep boom and a long metallic avalanche hiss. */
+  avalanche(): void {
+    this.tone(55, 0.8, 0.55, 'sine', 32);
+    this.noiseHit(1.6, 2600, 0.28, 'bandpass');
+    this.noiseHit(1.2, 7000, 0.12, 'highpass', 0.1);
+    for (let i = 0; i < 8; i++) this.delayedClink(0.05 + i * 0.09, 0.8);
   }
 
   /** A coin lost off a side: a little sad slide-whistle down. */

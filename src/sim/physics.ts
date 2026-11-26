@@ -1,13 +1,18 @@
 import RAPIER from '@dimforge/rapier3d-simd-compat';
-import { COIN, DROPPER, GRAVITY, IMPACT, MAX_COINS, PUSHER, RULES, SIM, TRAY } from '../config';
+import { COIN, COIN_KINDS, DROPPER, DUMP, FIGURINES, GRAVITY, IMPACT, MAX_COINS, PUSHER, RULES, SIM, TRAY, type CoinKind } from '../config';
 import type { CoinTag } from '../rules/economy';
 import type { Rng } from '../rng';
 import { Works, type WorksEvent } from './works';
+
+export type FigurineKind = (typeof FIGURINES.kinds)[number];
 
 export interface Coin {
   body: RAPIER.RigidBody;
   /** The drop's tag; null for coins from the starting pile. */
   tag: CoinTag | null;
+  kind: CoinKind;
+  /** Set for prize figurines, which ride the pile like coins but pay a prize. */
+  figurine?: FigurineKind;
   /** Which edge the coin went over first, fixed the step it crosses one. */
   edge: 'front' | 'side' | null;
   /** Position after the previous step, to order two crossings within one step. */
@@ -28,11 +33,30 @@ export function firstEdge(a: { x: number; z: number }, b: { x: number; z: number
   return tFront <= tSide ? 'front' : 'side';
 }
 
+/** Picks a coin kind by the `odds` weights, from one uniform draw in [0, 1). */
+export function pickKind(u: number): CoinKind {
+  const kinds = Object.keys(COIN_KINDS) as CoinKind[];
+  const total = kinds.reduce((s, k) => s + COIN_KINDS[k].odds, 0);
+  let acc = 0;
+  for (const k of kinds) {
+    acc += COIN_KINDS[k].odds / total;
+    if (u < acc) return k;
+  }
+  return 'standard';
+}
+
+/** The structures a session can start with on the tray (the user: "make the structure random"). */
+export const STRUCTURES = ['ring', 'pyramid', 'columns', 'wall'] as const;
+export type Structure = (typeof STRUCTURES)[number];
+
 export type SimEvent =
-  | { type: 'frontExit'; tag: CoinTag | null; x: number }
-  | { type: 'sideExit'; x: number }
+  | { type: 'frontExit'; tag: CoinTag | null; x: number; kind: CoinKind; figurine?: FigurineKind }
+  | { type: 'sideExit'; x: number; figurine?: FigurineKind }
   /** A dropped coin hit the pile: `speed` at impact, `hit` how many coins it blasted, `strength` 0..1. */
-  | { type: 'landed'; x: number; y: number; z: number; speed: number; hit: number; strength: number }
+  | { type: 'landed'; x: number; y: number; z: number; speed: number; hit: number; strength: number; kind: CoinKind }
+  /** A coin dump is about to fall (`in` seconds), then did fall. */
+  | { type: 'dumpWarning'; in: number }
+  | { type: 'dump'; count: number }
   | WorksEvent;
 
 const EXIT_Y = -4;
@@ -40,7 +64,7 @@ const SHELF_Y = PUSHER.height;
 
 /**
  * Rapier world for the pusher: a tray, side rails with open front corners, one kinematic pusher whose top is the
- * upper shelf, and a scraper wall above it. Knows nothing about payouts.
+ * upper shelf, a scraper wall above it, and the Works. Knows nothing about payouts.
  */
 export class PhysicsWorld {
   readonly world: RAPIER.World;
@@ -48,16 +72,19 @@ export class PhysicsWorld {
   pusherFront: number = PUSHER.frontMin;
   /** Milliseconds spent in the last `step()`, for the perf HUD. */
   lastStepMs = 0;
+  /** The structure this session started with. */
+  readonly structure: Structure;
   private readonly pusher: RAPIER.RigidBody;
-  private readonly coinShape = RAPIER.ColliderDesc.cylinder(COIN.halfThickness, COIN.radius);
   private time = 0;
   /** Dropped coins still in their first fall, with their fall speed last step (to detect the impact). */
   private readonly falling = new Map<RAPIER.RigidBody, number>();
-  /** Bodies blasted by an impact this step, with their blast strength, for the renderer's squash. */
+  /** Bodies blasted by an impact, with their blast strength, for the renderer's squash; the renderer clears it. */
   readonly blasted = new Map<number, number>();
   /** The machinery between the gates and the shelf. */
   readonly works: Works;
   private readonly bodies: RAPIER.RigidBody[] = [];
+  private nextDump: number;
+  private dumpAt = -1;
 
   static async create(rng: Rng): Promise<PhysicsWorld> {
     await RAPIER.init();
@@ -75,7 +102,9 @@ export class PhysicsWorld {
     );
     this.world.createCollider(RAPIER.ColliderDesc.cuboid(TRAY.halfWidth - 0.05, PUSHER.height / 2, PUSHER.depth / 2).setFriction(0.4), this.pusher);
     this.works = new Works(this.world, rng);
+    this.structure = STRUCTURES[Math.floor(rng.next() * STRUCTURES.length)]!;
     this.fillTray();
+    this.nextDump = rng.range(DUMP.minGap, DUMP.maxGap);
   }
 
   dispose(): void {
@@ -86,18 +115,33 @@ export class PhysicsWorld {
     return this.coins.length >= MAX_COINS;
   }
 
-  /** Drops a coin from the carriage at `x`. Returns false at the body cap (the caller refunds the coin). */
-  drop(x: number, tag: CoinTag | null): boolean {
-    if (this.full) return false;
-    const body = this.addCoin(x, DROPPER.y - 2, DROPPER.z + this.rng.range(-0.6, 0.6), tag);
+  get figurines(): number {
+    return this.coins.filter((c) => c.figurine).length;
+  }
+
+  /**
+   * Drops a coin from the carriage at `x`. Returns false at the body cap (the caller refunds the coin). Its kind is
+   * random by the kind odds, unless given. Now and then a prize figurine tumbles in alongside it.
+   */
+  drop(x: number, tag: CoinTag | null, kind: CoinKind = pickKind(this.rng.next())): CoinKind | null {
+    if (this.full) return null;
+    const body = this.addCoin(x, DROPPER.y - 2, DROPPER.z + this.rng.range(-0.6, 0.6), tag, kind);
     body.setLinvel({ x: 0, y: -80, z: 0 }, true);
     // A little wobble so coins land tilted and tumble, not as perfectly flat plates.
     body.setAngvel({ x: this.rng.range(-4, 4), y: 0, z: this.rng.range(-4, 4) }, true);
     this.falling.set(body, 80);
-    return true;
+    if (this.rng.next() < FIGURINES.dropChance && this.figurines < FIGURINES.max) {
+      this.addFigurine(this.rng.range(-10, 10), SHELF_Y + 14, this.rng.range(PUSHER.frontMax + 2, 2));
+    }
+    return kind;
   }
 
-  /** Advances one fixed step and reports tray exits and landings. */
+  /** Starts a coin dump now (debug); normally they arrive at random. */
+  dumpSoon(): void {
+    this.nextDump = this.time;
+  }
+
+  /** Advances one fixed step and reports tray exits, landings, the Works and coin dumps. */
   step(): SimEvent[] {
     const t0 = performance.now();
     this.time += this.world.timestep;
@@ -110,7 +154,6 @@ export class PhysicsWorld {
       const v = body.linvel();
       body.setLinvel({ x: v.x, y: v.y + dv, z: v.z }, true);
     }
-    // `blasted` accumulates across steps until the renderer reads and clears it; cap it for headless runs.
     if (this.blasted.size > MAX_COINS) this.blasted.clear();
     const works: WorksEvent[] = [];
     this.bodies.length = 0;
@@ -118,9 +161,31 @@ export class PhysicsWorld {
     this.works.before(this.world.timestep, this.bodies, works);
     this.world.step();
     this.works.after(this.world.timestep, this.bodies, works);
-    const events: SimEvent[] = [...works, ...this.classify()];
+    const events: SimEvent[] = [...works, ...this.dumps(), ...this.classify()];
     this.lastStepMs = performance.now() - t0;
     return events;
+  }
+
+  /** Random coin dumps: a warning, then a load of coins crashing onto the lower tray from above. */
+  private dumps(): SimEvent[] {
+    if (this.dumpAt < 0 && this.time >= this.nextDump) {
+      this.dumpAt = this.time + DUMP.warning;
+      return [{ type: 'dumpWarning', in: DUMP.warning }];
+    }
+    if (this.dumpAt < 0 || this.time < this.dumpAt) return [];
+    this.dumpAt = -1;
+    this.nextDump = this.time + this.rng.range(DUMP.minGap, DUMP.maxGap);
+    const room = Math.max(0, MAX_COINS - this.coins.length);
+    const count = Math.min(DUMP.coins, room);
+    const cx = this.rng.range(-6, 6);
+    for (let i = 0; i < count; i++) {
+      const kind = this.rng.next() < 0.15 ? pickKind(this.rng.next()) : 'standard';
+      const body = this.addCoin(cx + this.rng.range(-DUMP.spread, DUMP.spread) * 0.8, 26 + this.rng.range(0, 14), this.rng.range(-6, 6), null, kind);
+      body.setLinvel({ x: this.rng.range(-20, 20), y: -150 - this.rng.range(0, 80), z: this.rng.range(-10, 10) }, true);
+      body.setAngvel({ x: this.rng.range(-10, 10), y: 0, z: this.rng.range(-10, 10) }, true);
+      this.falling.set(body, 150);
+    }
+    return [{ type: 'dump', count }];
   }
 
   private classify(): SimEvent[] {
@@ -131,11 +196,10 @@ export class PhysicsWorld {
       const fallSpeed = this.falling.get(coin.body);
       if (fallSpeed !== undefined && !this.works.riding(coin.body)) {
         const vy = -coin.body.linvel().y;
-        // Landed: its fall was stopped this step (it hit the shelf, the pile or another coin) low enough to count.
-        // Below the Works (flippers sit at y ~8.4), so bumps on machinery are never taken for the landing.
+        // Landed: its fall was stopped low enough (below the Works) to be the pile or the shelf.
         if (p.y < SHELF_Y + 3.5 && vy < fallSpeed * 0.5) {
           this.falling.delete(coin.body);
-          events.push(this.impact(coin.body, p, fallSpeed));
+          events.push(this.impact(coin, p, fallSpeed));
         } else {
           this.falling.set(coin.body, Math.max(vy, 0));
         }
@@ -146,7 +210,11 @@ export class PhysicsWorld {
       else coin.edge ??= firstEdge(coin.prev, p);
       coin.prev = { x: p.x, z: p.z };
       if (p.y >= EXIT_Y) continue;
-      events.push(coin.edge === 'front' ? { type: 'frontExit', tag: coin.tag, x: p.x } : { type: 'sideExit', x: p.x });
+      events.push(
+        coin.edge === 'front'
+          ? { type: 'frontExit', tag: coin.tag, x: p.x, kind: coin.kind, ...(coin.figurine ? { figurine: coin.figurine } : {}) }
+          : { type: 'sideExit', x: p.x, ...(coin.figurine ? { figurine: coin.figurine } : {}) },
+      );
       this.falling.delete(coin.body);
       this.works.remove(coin.body);
       this.world.removeRigidBody(coin.body);
@@ -157,21 +225,24 @@ export class PhysicsWorld {
   }
 
   /**
-   * The landing blast: every coin within `IMPACT.radius` of the impact hops up and is pushed away from it, scaled by
-   * distance and by how hard the coin landed. Near a side rail the outward push is dropped, so blasts scatter the
-   * pile without dumping coins off the sides.
+   * The landing blast: every coin within reach of the impact hops up and is pushed away from it, scaled by distance,
+   * by how hard the coin landed and by how heavy it is (a lead coin shoves hard, a dime barely). Near a side rail the
+   * outward push is dropped, so blasts scatter the pile without dumping coins off the sides.
    */
-  private impact(body: RAPIER.RigidBody, p: RAPIER.Vector, speed: number): SimEvent {
-    const strength = Math.min(1, speed / IMPACT.fullSpeed);
+  private impact(coin: Coin, p: RAPIER.Vector, speed: number): SimEvent {
+    const k0 = COIN_KINDS[coin.kind];
+    const mass = (k0.scale * k0.scale * k0.thick * k0.density) / 7;
+    const strength = Math.min(1, (speed / IMPACT.fullSpeed) * Math.min(1.8, Math.sqrt(mass)));
+    const radius = IMPACT.radius * Math.min(1.5, 0.7 + 0.3 * mass);
     let hit = 0;
     for (const other of this.coins) {
-      if (other.body === body) continue;
+      if (other === coin) continue;
       const q = other.body.translation();
       const dx = q.x - p.x;
       const dz = q.z - p.z;
       const d = Math.hypot(dx, dz);
-      if (d > IMPACT.radius || Math.abs(q.y - p.y) > 4) continue;
-      const k = strength * (1 - d / IMPACT.radius);
+      if (d > radius || Math.abs(q.y - p.y) > 4) continue;
+      const k = strength * (1 - d / radius);
       const nx = d > 1e-3 ? dx / d : 0;
       const nz = d > 1e-3 ? dz / d : 0;
       const nearRail = TRAY.halfWidth - Math.abs(q.x) < IMPACT.railMargin && Math.sign(nx) === Math.sign(q.x);
@@ -181,15 +252,35 @@ export class PhysicsWorld {
       this.blasted.set(other.body.handle, k);
       hit++;
     }
-    // The lander itself squashes and bounces a little.
-    this.blasted.set(body.handle, strength);
-    return { type: 'landed', x: p.x, y: p.y, z: p.z, speed, hit, strength };
+    this.blasted.set(coin.body.handle, strength);
+    return { type: 'landed', x: p.x, y: p.y, z: p.z, speed, hit, strength, kind: coin.kind };
   }
 
-  private addCoin(x: number, y: number, z: number, tag: CoinTag | null): RAPIER.RigidBody {
+  private addCoin(x: number, y: number, z: number, tag: CoinTag | null, kind: CoinKind = 'standard'): RAPIER.RigidBody {
+    const k = COIN_KINDS[kind];
     const body = this.world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(x, y, z).setLinearDamping(0.3).setAngularDamping(0.8));
-    this.world.createCollider(this.coinShape.setDensity(COIN.density).setFriction(COIN.friction).setRestitution(COIN.restitution), body);
-    this.coins.push({ body, tag, edge: null, prev: { x, z } });
+    this.world.createCollider(
+      RAPIER.ColliderDesc.cylinder(COIN.halfThickness * k.thick, COIN.radius * k.scale)
+        .setDensity(k.density)
+        .setFriction(COIN.friction)
+        .setRestitution(COIN.restitution),
+      body,
+    );
+    this.coins.push({ body, tag, kind, edge: null, prev: { x, z } });
+    return body;
+  }
+
+  /** A prize figurine: a chunky, slightly bottom-heavy toy that rides and topples with the pile. */
+  addFigurine(x: number, y: number, z: number, kind?: FigurineKind): RAPIER.RigidBody {
+    const h = FIGURINES.halfSize;
+    const body = this.world.createRigidBody(
+      RAPIER.RigidBodyDesc.dynamic().setTranslation(x, y, z).setLinearDamping(0.4).setAngularDamping(1.2).setRotation({ x: 0, y: Math.sin(this.rng.range(-0.5, 0.5)), z: 0, w: 1 }),
+    );
+    // A capsule body on a wide base: stands up, rocks, and falls over when hit hard.
+    this.world.createCollider(RAPIER.ColliderDesc.capsule(h * 0.55, h * 0.6).setTranslation(0, h * 0.25, 0).setDensity(FIGURINES.density).setFriction(0.6).setRestitution(0.2), body);
+    this.world.createCollider(RAPIER.ColliderDesc.cylinder(h * 0.22, h * 0.85).setTranslation(0, -h * 0.85, 0).setDensity(FIGURINES.density * 2).setFriction(0.7), body);
+    const fig = kind ?? FIGURINES.kinds[Math.floor(this.rng.next() * FIGURINES.kinds.length)]!;
+    this.coins.push({ body, tag: null, kind: 'standard', figurine: fig, edge: null, prev: { x, z } });
     return body;
   }
 
@@ -216,7 +307,9 @@ export class PhysicsWorld {
 
   /**
    * The machine boots with a pile on the lower tray, settled behind a temporary fence at the front edge and corners
-   * (Neon Reef learned that without one a quarter of the pile slides off before play starts).
+   * (Neon Reef learned that without one a quarter of the pile slides off before play starts). Then a random coin
+   * structure is stacked on the pile with a few prize figurines; it's built after settling so it stands, and the first
+   * drops knock it over.
    */
   private fillTray(): void {
     const zMin = PUSHER.frontMin + COIN.radius + 0.3;
@@ -225,7 +318,8 @@ export class PhysicsWorld {
     const perLayer = 70;
     for (let i = 0; i < RULES.startPile; i++) {
       const layer = Math.floor(i / perLayer);
-      this.addCoin(this.rng.range(-xMax, xMax), 1 + layer * 1.4 + this.rng.range(0, 0.4), this.rng.range(zMin, zMax), null);
+      const kind = this.rng.next() < 0.12 ? pickKind(this.rng.next()) : 'standard';
+      this.addCoin(this.rng.range(-xMax, xMax), 1 + layer * 1.4 + this.rng.range(0, 0.4), this.rng.range(zMin, zMax), null, kind);
     }
     const fence = this.world.createRigidBody(RAPIER.RigidBodyDesc.fixed());
     this.world.createCollider(RAPIER.ColliderDesc.cuboid(TRAY.halfWidth + 1, 6, 0.5).setTranslation(0, 6, TRAY.front + 0.5), fence);
@@ -240,6 +334,76 @@ export class PhysicsWorld {
     // Run the pusher for a few strokes without the fence, discarding what spills, so the game starts on a settled
     // overhang instead of an avalanche of free coins in its first seconds.
     for (let i = 0; i < 4 * PUSHER.period * SIM.hz; i++) this.step();
+    this.build(this.structure);
+    for (let i = 0; i < FIGURINES.onTray; i++) this.addFigurine(this.rng.range(-13, 13), 6, this.rng.range(-2, 9));
+    // Let the build and the figurines settle onto the pile before play starts.
+    for (let i = 0; i < 40; i++) this.world.step();
     this.time = 0;
+  }
+
+  /** Stacks a coin structure on the pile, centred on the middle of the tray. */
+  private build(structure: Structure): void {
+    // Centred mid-tray, well back from the front edge (z 10), so a fresh build never spills on its own.
+    const cz = 0;
+    const top = (x: number, z: number) => this.surfaceY(x, z);
+    const t = COIN.halfThickness * 2 + 0.02;
+    const place = (x: number, z: number, y: number) => {
+      const body = this.addCoin(x, y, z, null);
+      body.setLinvel({ x: 0, y: 0, z: 0 }, true);
+    };
+    switch (structure) {
+      case 'ring': {
+        // A ring tower: rings of coins standing on their faces, stacked into a hollow cylinder.
+        const n = 10;
+        const r = 4.6;
+        const base = top(0, cz);
+        for (let level = 0; level < 6; level++) {
+          for (let i = 0; i < n; i++) {
+            const a = (i / n) * Math.PI * 2 + (level % 2 ? Math.PI / n : 0);
+            place(Math.cos(a) * r, cz + Math.sin(a) * r, base + 0.4 + level * t);
+          }
+        }
+        break;
+      }
+      case 'pyramid': {
+        const base = top(0, cz);
+        for (let level = 0; level < 5; level++) {
+          const side = 5 - level;
+          for (let i = 0; i < side; i++) {
+            for (let j = 0; j < side; j++) {
+              place((i - (side - 1) / 2) * 3.05, cz + (j - (side - 1) / 2) * 3.05, base + 0.4 + level * t);
+            }
+          }
+        }
+        break;
+      }
+      case 'columns': {
+        // Tall coin stacks dotted across the tray, wobbly and begging to be knocked over.
+        for (const [x, z] of [[-10, -1], [-5, 3], [0, -2], [5, 3], [10, -1]] as const) {
+          const base = top(x, z);
+          for (let level = 0; level < 9; level++) place(x + this.rng.range(-0.1, 0.1), z + this.rng.range(-0.1, 0.1), base + 0.4 + level * t);
+        }
+        break;
+      }
+      case 'wall': {
+        // A brick wall across the tray, staggered courses of coins edge to edge.
+        const base = top(0, cz);
+        for (let level = 0; level < 6; level++) {
+          const off = level % 2 ? 1.5 : 0;
+          for (let x = -12 + off; x <= 12; x += 3.05) place(x, cz, base + 0.4 + level * t);
+        }
+        break;
+      }
+    }
+  }
+
+  /** Height of the pile's top near (x, z): the highest coin within a coin's reach, or the tray floor. */
+  private surfaceY(x: number, z: number): number {
+    let y = 0;
+    for (const c of this.coins) {
+      const p = c.body.translation();
+      if (Math.hypot(p.x - x, p.z - z) < 6) y = Math.max(y, p.y + COIN.halfThickness);
+    }
+    return y;
   }
 }

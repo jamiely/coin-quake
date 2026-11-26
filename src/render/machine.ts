@@ -241,8 +241,11 @@ export function gaugeAngle(pressure: number): number {
   return -a - Math.PI / 2;
 }
 
-/** Repaints the counter plate. */
-export function paintCounter(g: CanvasRenderingContext2D, points: number, coins: number, hotLabel: string): void {
+/**
+ * Repaints the counter plate. `bounce[i]` (0..1) lifts and enlarges digit i: a digit that just ticked jumps and
+ * wobbles back down.
+ */
+export function paintCounter(g: CanvasRenderingContext2D, points: number, coins: number, hotLabel: string, bounce: readonly number[] = []): void {
   const { width: w, height: h } = g.canvas;
   g.clearRect(0, 0, w, h);
   roundRect(g, 10, 10, w - 20, h - 20, 60);
@@ -264,7 +267,8 @@ export function paintCounter(g: CanvasRenderingContext2D, points: number, coins:
     g.stroke();
     g.fillStyle = 'rgba(0,0,0,0.12)';
     g.fillRect(x0 + i * cell + 6, 114, cell - 12, 3);
-    chunkyText(g, digits[i]!, x0 + i * cell + cell / 2, 118, 110, PALETTE.cherry);
+    const b = bounce[i] ?? 0;
+    chunkyText(g, digits[i]!, x0 + i * cell + cell / 2, 118 - 26 * b, 110 * (1 + 0.28 * b), b > 0.3 ? '#ff5a1f' : PALETTE.cherry);
   }
   chunkyText(g, `COINS ${coins}`, 60, 280, 76, PALETTE.gold, 'left');
   chunkyText(g, hotLabel, w - 60, 280, 64, '#ffb27a', 'right');

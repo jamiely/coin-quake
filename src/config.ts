@@ -12,6 +12,42 @@ export const SIM = {
 /** A chunky cartoon coin, flat on the tray (Rapier cylinders stand on the Y axis); a little bounce so landings read. */
 export const COIN = { radius: 1.5, halfThickness: 0.35, density: 7, friction: 0.45, restitution: 0.32 };
 
+/**
+ * Coin kinds (the user: "different kinds of coins, some with different sizes"). Radius and thickness scale the
+ * standard coin; `value` multiplies its points; `pitch` scales its clink; `odds` weight how often a drop is this kind.
+ * Lead is heavy and shoves the pile hard; gold and rainbow are rare bonus coins.
+ */
+export const COIN_KINDS = {
+  standard: { scale: 1, thick: 1, density: 7, value: 1, pitch: 1, odds: 70, face: '#ffc83a', rim: '#d98a10' },
+  dime: { scale: 0.68, thick: 0.8, density: 7, value: 1, pitch: 1.5, odds: 12, face: '#dfe6ee', rim: '#8e9aa8' },
+  jumbo: { scale: 1.55, thick: 1.4, density: 7, value: 3, pitch: 0.7, odds: 8, face: '#ffb02e', rim: '#b5650d' },
+  lead: { scale: 1.2, thick: 1.6, density: 26, value: 2, pitch: 0.55, odds: 5, face: '#8a8fa8', rim: '#4b4f63' },
+  gold: { scale: 1.1, thick: 1.1, density: 9, value: 5, pitch: 1.25, odds: 4, face: '#fff08a', rim: '#ffb800' },
+  rainbow: { scale: 1.2, thick: 1.1, density: 7, value: 10, pitch: 1.35, odds: 1, face: '#ffffff', rim: '#ff5ad1' },
+} as const;
+export type CoinKind = keyof typeof COIN_KINDS;
+
+/**
+ * Prize figurines ("objects like little figurines to the stacks"): chunky cartoon toys that ride the pile and pay
+ * big when pushed off the front. Sizes in cm (half extents); a few start on the tray, more drop in now and then.
+ */
+export const FIGURINES = {
+  kinds: ['critter', 'professor', 'bolt', 'duck'] as const,
+  halfSize: 1.6,
+  density: 4,
+  points: 250,
+  onTray: 3,
+  /** Chance per drop that a figurine falls in with the coin (a prize drop). */
+  dropChance: 0.02,
+  max: 8,
+};
+
+/**
+ * Random coin dumps ("randomly dump a bunch of coins on the playfield"): every so often a siren sounds, then a load
+ * of coins crashes onto the tray from above. Seconds of simulated time.
+ */
+export const DUMP = { minGap: 45, maxGap: 90, warning: 1.6, coins: 45, spread: 13 };
+
 /** The lower tray: coins pushed past `front` fall off and pay; past the open corners they fall off the sides. */
 export const TRAY = {
   halfWidth: 18,
