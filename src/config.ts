@@ -158,7 +158,7 @@ export type GateIndex = 0 | 1 | 2;
  */
 export const RUN = {
   startStock: 150,
-  stockCap: 99,
+  stockCap: 300,
   /** Front-edge refills stop here; drop what's left. */
   lastCallSeconds: 210,
   /** Out of coins with none falling: tray spills in this window revive the run (the deep tray pays out slowly). */
