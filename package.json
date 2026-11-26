@@ -1,0 +1,62 @@
+{
+  "name": "coin-quake",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "main": "electron/main.mjs",
+  "description": "One-button cartoon coin pusher for a portrait arcade cabinet",
+  "author": "Jamie Ly",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "test": "vitest run",
+    "coverage": "vitest run --coverage",
+    "typecheck": "tsc --noEmit",
+    "build:electron:web": "tsc --noEmit && vite build",
+    "electron:start": "npm run build:electron:web && electron .",
+    "electron:dev": "node scripts/electron-dev.mjs",
+    "electron:smoke": "npm run build:electron:web && node scripts/electron-smoke.mjs",
+    "build:electron:win": "npm run build:electron:web && electron-builder --win portable nsis --x64 --publish never"
+  },
+  "devDependencies": {
+    "@dimforge/rapier3d-simd-compat": "^0.21.0",
+    "@types/three": "^0.186.0",
+    "@vitest/browser-playwright": "^5.0.3",
+    "@vitest/coverage-v8": "^5.0.3",
+    "electron": "^44.7.0",
+    "electron-builder": "^26.15.3",
+    "playwright": "^1.64.0",
+    "three": "^0.186.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.4",
+    "vite-plugin-singlefile": "^2.3.3",
+    "vitest": "^5.0.3"
+  },
+  "build": {
+    "appId": "com.jamiely.coinquake",
+    "productName": "Coin Quake",
+    "directories": {
+      "output": "dist_electron"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "!electron/smoke.mjs",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "portable",
+        "nsis"
+      ]
+    },
+    "portable": {
+      "artifactName": "Coin-Quake-${version}-win-${arch}-portable.${ext}"
+    },
+    "nsis": {
+      "artifactName": "Coin-Quake-${version}-win-${arch}-setup.${ext}",
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}
