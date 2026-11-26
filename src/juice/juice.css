@@ -6,11 +6,87 @@
   z-index: 5;
 }
 
+.juice-overlay,
+.juice-celebration {
+  /* One layout unit: 1% of the portrait cabinet's width, shrinking to fit on short (landscape) screens. */
+  --u: min(1vw, 0.625vh);
+  --ink: #2b1533;
+  --cream: #fff1d6;
+  --gold: #ffc83a;
+  --cherry: #e8344e;
+}
+
 .juice-flash {
   position: absolute;
   inset: 0;
   opacity: 0;
   mix-blend-mode: screen;
+}
+
+/* Sunburst rays shared by the title card and the celebration; rotated by transform only. */
+.juice-rays {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 260vmax;
+  height: 260vmax;
+  border-radius: 50%;
+  background: repeating-conic-gradient(from 0deg, var(--ray, rgb(255 200 58 / 0.26)) 0deg 9deg, transparent 9deg 22.5deg);
+  -webkit-mask-image: radial-gradient(circle, #000 4%, rgb(0 0 0 / 0.75) 14%, transparent 34%);
+  mask-image: radial-gradient(circle, #000 4%, rgb(0 0 0 / 0.75) 14%, transparent 34%);
+  opacity: 0;
+  will-change: transform, opacity;
+}
+
+/* ---- Title card ("QUAKE!!!"): a slanted comic band in the upper third; big ones dim the screen briefly. ---- */
+
+.juice-titlecard {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+}
+
+.juice-titlecard-dim,
+.juice-titlecard-rays,
+.juice-titlecard-band {
+  display: none;
+}
+
+.juice-titlecard.big .juice-titlecard-dim,
+.juice-titlecard.big .juice-titlecard-rays,
+.juice-titlecard.big .juice-titlecard-band {
+  display: block;
+}
+
+.juice-titlecard-dim {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  background: radial-gradient(ellipse 90% 45% at 50% 26%, rgb(43 21 51 / 0.35), rgb(43 21 51 / 0.72));
+}
+
+.juice-titlecard-rays {
+  top: 26%;
+  --ray: rgb(255 241 214 / 0.3);
+}
+
+.juice-band {
+  position: absolute;
+  left: -10%;
+  right: -10%;
+  background:
+    radial-gradient(circle, rgb(43 21 51 / 0.22) 22%, transparent 24%) 0 0 / calc(var(--u) * 2.4) calc(var(--u) * 2.4),
+    var(--title-color, var(--cherry));
+  border-block: calc(var(--u) * 1.1) solid var(--ink);
+  box-shadow: 0 calc(var(--u) * 1.2) 0 rgb(43 21 51 / 0.5);
+}
+
+.juice-titlecard-band {
+  top: 26%;
+  height: calc(var(--u) * 30);
+  opacity: 0;
+  --title-color: var(--gold);
+  will-change: transform, opacity;
 }
 
 .juice-title {
@@ -22,71 +98,174 @@
   flex-direction: column;
   align-items: center;
   font: 900 min(17vw, 11vh) / 1 "Arial Black", "Arial Rounded MT Bold", system-ui, sans-serif;
-  color: var(--title-color, #ffc83a);
+  color: var(--title-color, var(--gold));
   white-space: nowrap;
-  -webkit-text-stroke: 0.07em #2b1533;
+  -webkit-text-stroke: 0.07em var(--ink);
   paint-order: stroke fill;
-  text-shadow: 0 0.08em 0 #2b1533, 0 0.14em 0.2em rgb(0 0 0 / 0.45);
+  text-shadow: 0 0.08em 0 var(--ink), 0 0.14em 0.2em rgb(0 0 0 / 0.45);
   will-change: transform, opacity;
 }
 
-.juice-celebration {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-start;
-  padding-top: 17vh;
-  opacity: 0;
-  /* Presentation only: input goes to the game, which decides whether a press skips. */
-  pointer-events: none;
-  font-family: "Arial Black", "Arial Rounded MT Bold", system-ui, sans-serif;
-  font-weight: 900;
-  -webkit-text-stroke: 0.07em #2b1533;
-  paint-order: stroke fill;
-  text-shadow: 0 0.08em 0 #2b1533, 0 0.14em 0.25em rgb(0 0 0 / 0.5);
-  background: radial-gradient(ellipse at 50% 30%, rgb(255 230 120 / 0.28), transparent 60%);
-}
-
-.juice-stamp {
-  padding: 0.05em 0.35em;
-  font-size: min(11vw, 7vh);
-  line-height: 1.05;
-  color: var(--stamp-color, #ffc83a);
-  border: 0.09em solid #2b1533;
-  border-radius: 0.25em;
-  background: rgb(255 241 214 / 0.92);
-  box-shadow: 0 0 0 0.05em var(--stamp-color, #ffc83a), 0 0.12em 0 #2b1533;
-  white-space: nowrap;
-  will-change: transform;
-}
-
-.juice-stamp-sub {
-  margin-top: 0.4em;
-  font-size: min(6.5vw, 4vh);
-  color: #fff1d6;
-}
-
-.juice-tally {
-  margin-top: 0.25em;
-  font-size: min(13vw, 8vh);
-  color: #ffc83a;
-  font-variant-numeric: tabular-nums;
-  will-change: transform;
-}
-
-.juice-hint {
-  position: absolute;
-  bottom: 9vh;
-  font-size: min(4.5vw, 2.8vh);
-  color: #fff1d6;
-  -webkit-text-stroke: 0.08em #2b1533;
-  opacity: 0;
+.juice-titlecard.big .juice-title {
+  top: 26%;
+  font-size: calc(var(--u) * 16.5);
+  text-shadow: 0 0.09em 0 var(--ink), 0.05em 0.12em 0 var(--cream);
 }
 
 .juice-title small {
   margin-top: 0.15em;
   font-size: 0.38em;
-  color: #fff1d6;
+  color: var(--cream);
+}
+
+.juice-titlecard.big .juice-title small {
+  margin-top: 0.22em;
+  padding: 0.08em 0.5em 0.12em;
+  font-size: 0.34em;
+  color: var(--cream);
+  background: var(--ink);
+  border-radius: 0.3em;
+  -webkit-text-stroke: 0;
+  text-shadow: none;
+  letter-spacing: 0.04em;
+}
+
+/* ---- Celebration: a full-screen takeover. ---- */
+
+.juice-celebration {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  visibility: hidden;
+  /* Presentation only: input goes to the game, which decides whether a press skips. */
+  pointer-events: none;
+  font-family: "Arial Black", "Arial Rounded MT Bold", system-ui, sans-serif;
+  font-weight: 900;
+  line-height: 1;
+  white-space: nowrap;
+  paint-order: stroke fill;
+}
+
+.juice-celebration.on {
+  visibility: visible;
+}
+
+/* Translucent so the fireworks and confetti in the 3D canvas still glow through. */
+.juice-cel-backdrop {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  background:
+    radial-gradient(ellipse 70% 40% at 50% 46%, rgb(232 52 78 / 0.5), transparent 70%),
+    linear-gradient(rgb(43 21 51 / 0.82), rgb(43 21 51 / 0.66) 45%, rgb(43 21 51 / 0.86));
+}
+
+.juice-cel-rays {
+  top: 46%;
+}
+
+/* Comic halftone in the corners, fading toward the centre. */
+.juice-cel-halftone {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle, rgb(255 200 58 / 0.22) 28%, transparent 31%) 0 0 / calc(var(--u) * 3) calc(var(--u) * 3);
+  -webkit-mask-image: radial-gradient(ellipse 75% 60% at 50% 46%, transparent 45%, #000 100%);
+  mask-image: radial-gradient(ellipse 75% 60% at 50% 46%, transparent 45%, #000 100%);
+}
+
+.juice-cel-stage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(var(--u) * 7);
+  /* Sit a little above centre, leaving the bottom band to the continue hint. */
+  margin-bottom: calc(var(--u) * 12);
+}
+
+.juice-stamp {
+  padding: 0.12em 0.4em 0.16em;
+  font-size: calc(var(--u) * 10.5);
+  color: var(--stamp-color, var(--cherry));
+  -webkit-text-stroke: 0.06em var(--ink);
+  text-shadow: 0 0.07em 0 var(--ink);
+  border: 0.1em solid var(--ink);
+  border-radius: 0.22em;
+  background: var(--cream);
+  box-shadow: inset 0 0 0 0.08em var(--stamp-color, var(--cherry)), 0 0.14em 0 var(--ink), 0 0.3em 0.6em rgb(0 0 0 / 0.4);
+  opacity: 0;
+  will-change: transform, opacity;
+}
+
+.juice-cel-plaque {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(var(--u) * 2.5);
+  opacity: 0;
+  will-change: transform, opacity;
+}
+
+.juice-stamp-sub {
+  padding: 0.18em 0.7em 0.22em;
+  font-size: calc(var(--u) * 4.4);
+  letter-spacing: 0.08em;
+  color: var(--cream);
+  background: var(--ink);
+  border: 0.12em solid var(--gold);
+  border-radius: 99em;
+}
+
+/* Fits its final width: --tally-chars is set once per start, so counting never reflows or clips. */
+.juice-tally {
+  font-size: min(calc(var(--u) * 26), calc(var(--u) * 132 / var(--tally-chars, 6)));
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+  -webkit-text-stroke: 0.07em var(--ink);
+  text-shadow: 0 0.07em 0 var(--ink), 0 0.1em 0 var(--cherry), 0 0.2em 0.4em rgb(0 0 0 / 0.5);
+  will-change: transform;
+}
+
+/* The continue hint owns a band along the bottom edge. */
+.juice-hint {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--u) * 3);
+  height: calc(var(--u) * 17);
+  font-size: calc(var(--u) * 5.6);
+  color: var(--cream);
+  -webkit-text-stroke: 0.08em var(--ink);
+  text-shadow: 0 0.08em 0 var(--ink);
+  background: var(--cherry);
+  border-top: calc(var(--u) * 1.1) solid var(--ink);
+  box-shadow: 0 calc(var(--u) * -1.2) 0 rgb(43 21 51 / 0.45);
+  opacity: 0;
+  will-change: transform, opacity;
+}
+
+.juice-hint > span:last-child {
+  display: inline-block;
+  transform: scale(var(--pulse, 1));
+}
+
+/* A chunky round arcade button, so "press" has an obvious object. */
+.juice-hint-button {
+  width: 1.5em;
+  height: 1.5em;
+  flex: none;
+  border-radius: 50%;
+  background: radial-gradient(circle at 38% 32%, #fff6c9 0 14%, var(--gold) 16% 58%, #d99a12 62%);
+  border: 0.14em solid var(--ink);
+  box-shadow: 0 0.14em 0 var(--ink);
+  transform: scale(var(--pulse, 1));
 }

@@ -1,9 +1,10 @@
 import * as THREE from 'three';
 import type { Sound } from './audio/sound';
-import { DROPPER, TRAY } from './config';
+import { DROPPER, TRAY, WORKS } from './config';
 import { Celebration, Juice, Overlay, ParticlePool, PopupPool, type Recipe, type Weight } from './juice';
 import { PALETTE } from './render/toon';
 import type { PressureEvent, Tier } from './rules/pressure';
+import type { WorksEvent } from './sim/works';
 
 /** Coin Quake's recipe table: every event at every weight (GAME_DESIGN.md §4.1). */
 export const RECIPES: Record<string, Partial<Record<Weight, Recipe>>> = {
@@ -14,6 +15,12 @@ export const RECIPES: Record<string, Partial<Record<Weight, Recipe>>> = {
     2: { trauma: 0.14, kick: 0.5, flash: { color: '#ffe27a', opacity: 0.08, fade: 0.15 } },
   },
   loss: { 1: { trauma: 0.06 } },
+  peg: { 1: { trauma: 0.03 } },
+  gear: { 1: { trauma: 0.08 } },
+  loop: { 1: { trauma: 0.12, kick: 0.4 } },
+  flipper: { 1: { trauma: 0.1, kick: 0.35 } },
+  zap: { 1: { trauma: 0.1, kick: 0.3, flash: { color: '#bff4ff', opacity: 0.12, fade: 0.12 } } },
+  bonus: { 2: { trauma: 0.4, hitStop: 0.08, punch: -3, flash: { color: '#fff1a8', opacity: 0.35, fade: 0.3 } } },
   milestone: {
     1: { trauma: 0.35, hitStop: 0.06, punch: -2.5, flash: { color: '#ffffff', opacity: 0.35, fade: 0.25 } },
     3: { trauma: 0.5, hitStop: 0.09, punch: -3.5, flash: { color: '#ffffff', opacity: 0.5, fade: 0.3 }, slowMo: { scale: 0.4, hold: 0.25 } },
@@ -94,6 +101,52 @@ export class Fx {
     if (combo >= 3) this.popups.show(`COMBO x${combo}`, { x: 0, y: 12, z: TRAY.front - 4 }, { fill: TIER_COLORS[Math.min(3, Math.floor(combo / 5)) as Tier], ink: '#2b1533', size: 3 + Math.min(combo, 25) * 0.06, life: 0.7, rise: 3, tilt: 0.4 });
   }
 
+  /** The Works: every machine part a coin touches reacts with sparks, a sound and sometimes a word. */
+  works(e: WorksEvent): void {
+    const z = WORKS.z + WORKS.halfDepth + 0.5;
+    const at = { x: e.x, y: e.y, z };
+    switch (e.type) {
+      case 'peg':
+        this.juice.fire('peg');
+        this.sound.peg(e.index);
+        this.particles.burst({ at, count: 7, color: '#fff36b', speed: 22, size: 0.55, life: 0.25, drag: 5 }, this.rand);
+        break;
+      case 'gear':
+        this.juice.fire('gear');
+        this.sound.ratchet();
+        this.particles.burst({ at, count: 12, color: '#ffb02e', speed: 40, size: 0.5, life: 0.35, gravity: -60 }, this.rand);
+        if (this.rand() < 0.35) this.popups.show('WHEE!', { x: e.x, y: e.y + 3, z }, { fill: '#fff1d6', ink: '#2b1533', size: 1.8, life: 0.6, rise: 6, tilt: 0.6 });
+        break;
+      case 'loopIn':
+        this.sound.whoosh(false);
+        break;
+      case 'loopOut':
+        this.juice.fire('loop', 1, { x: -1, y: -0.5 });
+        this.sound.whoosh(true);
+        this.particles.burst({ at, count: 18, color: PALETTE.sky, speed: 45, dir: { x: -1, y: -0.6, z: 0 }, spread: 0.5, size: 0.7, life: 0.4 }, this.rand);
+        this.popups.show('ZOOM!', { x: e.x, y: e.y + 3, z }, { fill: PALETTE.sky, ink: '#2b1533', size: 2, life: 0.6, rise: 5, tilt: 0.5 });
+        break;
+      case 'flipper':
+        this.juice.fire('flipper', 1, { x: -e.side, y: 0 });
+        this.sound.flipper();
+        this.particles.burst({ at, count: 10, color: '#ffffff', speed: 30, dir: { x: -e.side, y: 1, z: 0 }, spread: 0.7, size: 0.6, life: 0.3 }, this.rand);
+        break;
+      case 'zap':
+        this.juice.fire('zap', 1, { x: e.side, y: 0 });
+        this.sound.zap();
+        this.particles.burst({ at, count: 22, color: '#bff4ff', speed: 38, size: 0.45, life: 0.22, drag: 6 }, this.rand);
+        if (this.rand() < 0.4) this.popups.show('ZZAP!', { x: e.x, y: e.y + 3, z }, { fill: '#bff4ff', ink: '#2b1533', size: 1.8, life: 0.5, rise: 6, tilt: 0.7 });
+        break;
+      case 'bonus':
+        this.juice.fire('bonus', 2);
+        this.sound.milestone(10);
+        this.confetti(80);
+        this.particles.burst({ at, count: 40, color: PALETTE.gold, speed: 55, dir: { x: 0, y: 1, z: 0.3 }, spread: 0.9, size: 0.8, life: 0.6, shape: 'chip', spin: true }, this.rand);
+        this.popups.show('BONUS!', { x: e.x, y: e.y + 4, z }, { fill: PALETTE.gold, ink: '#2b1533', size: 3.2, life: 1, rise: 5, tilt: 0.4 });
+        break;
+    }
+  }
+
   loss(x: number): void {
     this.juice.fire('loss');
     this.sound.loss();
@@ -159,7 +212,6 @@ export class Fx {
     this.steam(3);
     this.confetti(600);
     this.volley(12, 4.5);
-    for (const word of ['YEAH!', 'WOOO!', 'BRAVO!']) this.popups.show(word, { x: (this.rand() - 0.5) * 30, y: -14 + this.rand() * 6, z: TRAY.front + 6 }, { fill: '#fff1d6', ink: '#2b1533', size: 3, life: 1.6, rise: 6, tilt: 0.6 });
     this.celebration.start({ stamp: 'MEGA QUAKE!', sub: 'FEVER TALLY', total: this.feverPoints, label: '+', color: PALETTE.cherry, duration: 5.5 });
   }
 
