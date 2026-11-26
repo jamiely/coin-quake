@@ -44,10 +44,22 @@ export class Works {
   private readonly flippers: RAPIER.RigidBody[] = [];
   private readonly flipperUntil: [number, number] = [0, 0];
   private readonly zapReady: [number, number] = [0, 0];
-  private readonly pegCooldown = new Map<number, number>();
-  private readonly lastGearKick = new Map<number, number>();
-  private readonly stillFor = new Map<number, number>();
+  /** Per-body state, keyed by the body object (Rapier handles are float-encoded and unsafe to combine). */
+  private readonly pegCooldown = new Map<RAPIER.RigidBody, Map<number, number>>();
+  private readonly lastGearKick = new Map<RAPIER.RigidBody, number>();
+  private readonly stillFor = new Map<RAPIER.RigidBody, number>();
+  private readonly riding_ = new Set<RAPIER.RigidBody>();
   private time = 0;
+  /** Reused contact callback state, so stepping allocates no closure per body. */
+  private contactBody: RAPIER.RigidBody | null = null;
+  private contactPos: RAPIER.Vector = { x: 0, y: 0, z: 0 };
+  private contactEvents: WorksEvent[] = [];
+  private readonly onContact = (other: RAPIER.Collider): void => {
+    const body = this.contactBody!;
+    const peg = this.pegColliders.get(other.handle);
+    if (peg !== undefined) this.pingPeg(peg, body, this.contactPos, this.contactEvents);
+    else if (other.parent()?.handle === this.gear.handle) this.flingFromGear(body, this.contactPos, this.contactEvents);
+  };
 
   constructor(
     private readonly world: RAPIER.World,
@@ -126,28 +138,38 @@ export class Works {
       if (this.riding(body)) continue;
       const pos = body.translation();
       if (pos.y < WORKS.flippers.y - 3 || Math.abs(pos.z - WORKS.z) > WORKS.halfDepth + COIN.radius) continue;
-      const collider = body.collider(0);
-      this.world.contactPairsWith(collider, (other) => {
-        const peg = this.pegColliders.get(other.handle);
-        if (peg !== undefined) this.pingPeg(peg, body, pos, events);
-        else if (other.parent()?.handle === this.gear.handle) this.flingFromGear(body, pos, events);
-      });
+      this.contactBody = body;
+      this.contactPos = pos;
+      this.contactEvents = events;
+      this.world.contactPairsWith(body.collider(0), this.onContact);
       this.unstick(body, dt);
     }
-    for (const [handle, until] of this.pegCooldown) if (until < this.time) this.pegCooldown.delete(handle);
+    this.contactBody = null;
   }
 
   /** Coins riding the loop are out of the simulation; the caller must not count them as stuck or exited. */
   riding(body: RAPIER.RigidBody): boolean {
-    return this.riders.some((r) => r.body === body);
+    return this.riding_.has(body);
   }
 
   /** Forgets a coin that left the machine. */
   remove(body: RAPIER.RigidBody): void {
-    const i = this.riders.findIndex((r) => r.body === body);
-    if (i >= 0) this.riders.splice(i, 1);
-    this.stillFor.delete(body.handle);
-    this.lastGearKick.delete(body.handle);
+    if (this.riding_.delete(body)) {
+      const i = this.riders.findIndex((r) => r.body === body);
+      if (i >= 0) this.riders.splice(i, 1);
+    }
+    this.stillFor.delete(body);
+    this.lastGearKick.delete(body);
+    this.pegCooldown.delete(body);
+  }
+
+  /** Forgets every body (the world is being freed). */
+  clear(): void {
+    this.riders.length = 0;
+    this.riding_.clear();
+    this.stillFor.clear();
+    this.lastGearKick.clear();
+    this.pegCooldown.clear();
   }
 
   /** Point on the loop path at progress `t` (0 entry, 1 exit), for physics and for drawing the coin in the tube. */
@@ -187,6 +209,7 @@ export class Works {
       if (v.y < 0 && Math.abs(p.x - l.x) < 2.2 && p.y < l.entryY && p.y > l.entryY - 2.5) {
         body.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased, true);
         this.riders.push({ body, t: 0 });
+        this.riding_.add(body);
         this.loopHit = 0;
         events.push({ type: 'loopIn', x: p.x, y: p.y });
         continue;
@@ -238,6 +261,7 @@ export class Works {
       }
       // Shoot out of the pipe's mouth.
       this.riders.splice(i, 1);
+      this.riding_.delete(r.body);
       r.body.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
       r.body.setTranslation({ x: l.exit.x, y: l.exit.y, z: WORKS.z }, true);
       r.body.setLinvel({ x: l.exit.vx, y: l.exit.vy, z: 0 }, true);
@@ -248,8 +272,10 @@ export class Works {
   }
 
   private pingPeg(index: number, body: RAPIER.RigidBody, pos: RAPIER.Vector, events: WorksEvent[]): void {
-    if ((this.pegCooldown.get(body.handle * 64 + index) ?? -1) > this.time) return;
-    this.pegCooldown.set(body.handle * 64 + index, this.time + 0.2);
+    let cool = this.pegCooldown.get(body);
+    if (!cool) this.pegCooldown.set(body, (cool = new Map()));
+    if ((cool.get(index) ?? -1) > this.time) return;
+    cool.set(index, this.time + 0.2);
     this.pegHit[index] = 0;
     const peg = this.pegs[index]!;
     // Spring kick away from the peg's centre: cartoon bumpers, not dead pins.
@@ -263,8 +289,8 @@ export class Works {
   }
 
   private flingFromGear(body: RAPIER.RigidBody, pos: RAPIER.Vector, events: WorksEvent[]): void {
-    if ((this.lastGearKick.get(body.handle) ?? -1) > this.time) return;
-    this.lastGearKick.set(body.handle, this.time + 0.35);
+    if ((this.lastGearKick.get(body) ?? -1) > this.time) return;
+    this.lastGearKick.set(body, this.time + 0.35);
     this.gearHit = 0;
     // Fling tangentially (the wheel spins counter-clockwise) and outward.
     const g = WORKS.gear;
@@ -282,12 +308,12 @@ export class Works {
   private unstick(body: RAPIER.RigidBody, dt: number): void {
     const v = body.linvel();
     const still = Math.hypot(v.x, v.y) < WORKS.stuckSpeed;
-    const t = still ? (this.stillFor.get(body.handle) ?? 0) + dt : 0;
+    const t = still ? (this.stillFor.get(body) ?? 0) + dt : 0;
     if (t < WORKS.stuckTime) {
-      this.stillFor.set(body.handle, t);
+      this.stillFor.set(body, t);
       return;
     }
-    this.stillFor.set(body.handle, 0);
+    this.stillFor.set(body, 0);
     body.setLinvel({ x: this.rng.range(-40, 40), y: 30, z: 0 }, true);
   }
 }

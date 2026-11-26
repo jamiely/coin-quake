@@ -166,6 +166,9 @@ export class CoinsView {
   private readonly kinds = new Map<CoinKind, KindMesh>();
   private readonly figurines = new Map<number, THREE.Group>();
   private readonly figurineGroup = new THREE.Group();
+  /** Hidden figurine models waiting to be reused, by kind. */
+  private readonly figurinePool = new Map<string, THREE.Group[]>();
+  private readonly seen = new Set<number>();
   private readonly squash = new Map<number, number>();
   private readonly squashAge = new Map<number, number>();
   /** Seconds since each coin last landed or was blasted, for cheer and dizzy faces. */
@@ -207,7 +210,8 @@ export class CoinsView {
     }
     physics.blasted.clear();
     for (const km of this.kinds.values()) km.count = 0;
-    const seen = new Set<number>();
+    const seen = this.seen;
+    seen.clear();
     for (const coin of physics.coins) {
       const b = coin.body;
       const h = b.handle;
@@ -274,10 +278,15 @@ export class CoinsView {
       km.mesh.instanceMatrix.needsUpdate = km.outline.instanceMatrix.needsUpdate = true;
       km.face.needsUpdate = true;
     }
+    // A figurine that left the machine goes back to its kind's pool, so prize drops never allocate GPU resources again.
     for (const [h, g] of this.figurines) {
       if (seen.has(h)) continue;
-      this.figurineGroup.remove(g);
+      g.visible = false;
       this.figurines.delete(h);
+      const kind = g.userData.kind as string;
+      let pool = this.figurinePool.get(kind);
+      if (!pool) this.figurinePool.set(kind, (pool = []));
+      pool.push(g);
     }
     for (const map of [this.squash, this.squashAge, this.cheerAge, this.dizzyAge]) for (const h of map.keys()) if (!seen.has(h)) map.delete(h);
   }
@@ -285,9 +294,14 @@ export class CoinsView {
   private drawFigurine(h: number, kind: string, p: RAPIER_Vec, r: RAPIER_Rot, t: number): void {
     let g = this.figurines.get(h);
     if (!g) {
-      g = buildFigurine(kind);
+      g = this.figurinePool.get(kind)?.pop();
+      if (!g) {
+        g = buildFigurine(kind);
+        g.userData.kind = kind;
+        this.figurineGroup.add(g);
+      }
+      g.visible = true;
       this.figurines.set(h, g);
-      this.figurineGroup.add(g);
     }
     g.position.set(p.x, p.y, p.z);
     g.quaternion.set(r.x, r.y, r.z, r.w);

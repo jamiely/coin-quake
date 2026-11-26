@@ -59,6 +59,7 @@ export class Fx {
   /** Seconds of dump-warning rumble left. */
   private dumpRumble = 0;
   private pendingWon = 0;
+  private pendingX = 0;
   private lastPayPopup = -1;
   private lastComboPopup = -1;
   private clock = 0;
@@ -119,6 +120,7 @@ export class Fx {
     if (kind === 'rainbow') for (const c of RAINBOW) this.particles.burst({ at, count: 6, color: c, speed: 50, dir: { x: 0, y: 1, z: 0.4 }, spread: 0.8, size: 0.7, life: 0.7, shape: 'chip', spin: true }, this.rand);
     // In a fast chain the "+N" popups merge: one popup at most every 0.15 s shows everything won since the last.
     this.pendingWon += won;
+    this.pendingX = x;
     if (this.clock - this.lastPayPopup >= 0.15 || bonus || hot) {
       this.popups.show(`+${this.pendingWon}`, { x, y: 2, z: TRAY.front + 3 }, { fill: hot ? '#ffb02e' : fever ? '#ff7af0' : bonus ? COIN_KINDS[kind].face : PALETTE.gold, ink: '#2b1533', size: 2.4 + Math.min(combo, 10) * 0.12, rise: 9 });
       this.pendingWon = 0;
@@ -293,6 +295,12 @@ export class Fx {
   update(realDt: number, camera: THREE.Camera): void {
     this.clock += realDt;
     this.dumpRumble = Math.max(0, this.dumpRumble - realDt);
+    // Show the rest of a merged burst once its window closes, so the last coins of a chain are never silent.
+    if (this.pendingWon > 0 && this.clock - this.lastPayPopup >= 0.15) {
+      this.popups.show(`+${this.pendingWon}`, { x: this.pendingX, y: 2, z: TRAY.front + 3 }, { fill: PALETTE.gold, ink: '#2b1533', size: 2.4, rise: 9 });
+      this.pendingWon = 0;
+      this.lastPayPopup = this.clock;
+    }
     for (let i = this.volleys.length - 1; i >= 0; i--) {
       const v = this.volleys[i]!;
       if (v.at > this.clock) continue;

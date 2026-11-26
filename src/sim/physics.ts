@@ -108,6 +108,11 @@ export class PhysicsWorld {
   }
 
   dispose(): void {
+    // Drop every reference to bodies before the WASM world frees them.
+    this.works.clear();
+    this.falling.clear();
+    this.blasted.clear();
+    this.coins.length = 0;
     this.world.free();
   }
 
@@ -130,7 +135,7 @@ export class PhysicsWorld {
     // A little wobble so coins land tilted and tumble, not as perfectly flat plates.
     body.setAngvel({ x: this.rng.range(-4, 4), y: 0, z: this.rng.range(-4, 4) }, true);
     this.falling.set(body, 80);
-    if (this.rng.next() < FIGURINES.dropChance && this.figurines < FIGURINES.max) {
+    if (!this.full && this.rng.next() < FIGURINES.dropChance && this.figurines < FIGURINES.max) {
       this.addFigurine(this.rng.range(-10, 10), SHELF_Y + 14, this.rng.range(PUSHER.frontMax + 2, 2));
     }
     return kind;
