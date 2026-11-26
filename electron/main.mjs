@@ -106,7 +106,9 @@ async function createWindow() {
     app.exit(1);
   });
   const smokeRun = smoke ? (await import("./smoke.mjs")).prepareSmoke(win, projectRoot) : null;
-  await win.loadURL(devUrl ?? `${origin}/index.html`);
+  // `--debug` opens the perf HUD (fps, physics/render ms) for measuring on the cabinet.
+  const query = process.argv.includes("--debug") ? "?debug" : "";
+  await win.loadURL(devUrl ?? `${origin}/index.html${query}`);
   if (smokeRun) {
     await smokeRun();
   } else {
