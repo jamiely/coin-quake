@@ -43,6 +43,16 @@ describe('Trigger', () => {
     expect(n).toBe(8);
   });
 
+  it('cancel drops nothing more from the gesture, including a pending tap', () => {
+    const t = new Trigger();
+    t.press(0);
+    expect(t.held).toBe(true);
+    t.cancel();
+    expect(t.held).toBe(false);
+    expect(t.due(0)).toBe(0);
+    expect(t.due(1)).toBe(0);
+  });
+
   it('ignores key-repeat presses while held', () => {
     const t = new Trigger();
     t.press(0);

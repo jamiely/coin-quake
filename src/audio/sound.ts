@@ -11,7 +11,8 @@ export class Sound {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
   private noise: AudioBuffer | null = null;
-  private voices = 0;
+  /** [start, end] audio-clock times of scheduled voices, to budget by what actually overlaps. */
+  private spans: [number, number][] = [];
   private lastClink = 0;
   private clinksInWindow = 0;
   muted = false;
@@ -114,8 +115,7 @@ export class Sound {
    * saws through a vowel-ish band-pass), timpani on the downbeats and a cymbal swell. About 4.5 s.
    */
   fanfare(): void {
-    const o = this.out();
-    if (!o) return;
+    if (!this.ctx || this.muted) return;
     const beat = 0.27;
     // E E F G | G F E D | C C D E | E. D D (in D major here: F# F# G A | A G F# E | D D E F# | F#. E E)
     const ode: [number, number][] = [
@@ -153,7 +153,7 @@ export class Sound {
   }
 
   private brass(freq: number, dur: number, delay: number, gain = 0.09): void {
-    const o = this.out();
+    const o = this.out(delay, dur);
     if (!o) return;
     const t = o.ctx.currentTime + delay;
     const osc = o.ctx.createOscillator();
@@ -175,7 +175,7 @@ export class Sound {
 
   private choir(freq: number, dur: number, delay: number): void {
     for (const detune of [-9, 7]) {
-      const o = this.out();
+      const o = this.out(delay, dur);
       if (!o) return;
       const t = o.ctx.currentTime + delay;
       const osc = o.ctx.createOscillator();
@@ -200,13 +200,26 @@ export class Sound {
     [0, 7, 12, 16].forEach((s, i) => this.tone(880 * 2 ** (s / 12), 0.1, 0.13, 'square', undefined, i * 0.05));
   }
 
-  private out(): { ctx: AudioContext; master: GainNode } | null {
-    if (!this.ctx || !this.master || this.muted || this.voices >= MAX_VOICES) return null;
+  /**
+   * Context for a new voice starting `delay` s from now and lasting `dur`, or null when muted or when MAX_VOICES
+   * voices already sound at that start. Future notes count only while they overlap, so a long scheduled fanfare does
+   * not starve its own later chords or the sounds that follow it.
+   */
+  private out(delay = 0, dur = 0): { ctx: AudioContext; master: GainNode } | null {
+    if (!this.ctx || !this.master || this.muted) return null;
+    const now = this.ctx.currentTime;
+    const start = now + delay;
+    const end = start + dur + 0.02;
+    this.spans = this.spans.filter(([, e]) => e > now);
+    let overlapping = 0;
+    for (const [s0, e0] of this.spans) if (s0 < end && e0 > start) overlapping++;
+    if (overlapping >= MAX_VOICES) return null;
+    this.spans.push([start, end]);
     return { ctx: this.ctx, master: this.master };
   }
 
   private tone(freq: number, dur: number, gain: number, type: OscillatorType, slideTo?: number, delay = 0): void {
-    const o = this.out();
+    const o = this.out(delay, dur);
     if (!o) return;
     const t = o.ctx.currentTime + delay;
     const osc = o.ctx.createOscillator();
@@ -222,7 +235,7 @@ export class Sound {
   }
 
   private noiseHit(dur: number, freq: number, gain: number, type: BiquadFilterType, delay = 0): void {
-    const o = this.out();
+    const o = this.out(delay, dur);
     if (!o || !this.noise) return;
     const t = o.ctx.currentTime + delay;
     const src = o.ctx.createBufferSource();
@@ -238,8 +251,6 @@ export class Sound {
   }
 
   private track(node: AudioScheduledSourceNode, t: number, dur: number): void {
-    this.voices++;
-    node.onended = () => this.voices--;
     node.start(t);
     node.stop(t + dur + 0.02);
   }

@@ -27,6 +27,8 @@ export class Game {
   readonly perf = { frame: 0, physics: 0, render: 0, fps: 0 };
   private readonly trigger = new Trigger();
   private lastDropAt = -1;
+  /** The current button gesture was used by a celebration; ignore it until released. */
+  private swallowed = false;
   private acc = 0;
   private last = 0;
   private raf = 0;
@@ -77,12 +79,18 @@ export class Game {
 
   press(): void {
     this.sound.unlock();
-    // During a celebration the button skips it (once allowed) instead of dropping.
-    if (this.fx.skip()) return;
+    // A celebration owns the button: a press skips it (once allowed) and never drops, and the gesture stays swallowed
+    // until released, so a hold that skipped cannot start streaming paid coins.
+    if (this.fx.skip()) {
+      this.swallowed = true;
+      return;
+    }
+    if (this.swallowed) return;
     this.trigger.press(this.simTime);
   }
 
   release(): void {
+    this.swallowed = false;
     this.trigger.release();
   }
 
@@ -123,6 +131,11 @@ export class Game {
     this.simTime += 1 / SIM.hz;
     this.economy.tick(this.simTime);
     for (const e of this.pressure.tick(this.simTime)) this.fx.pressure(e);
+    if (this.fx.celebration.active) {
+      // A hold that started before the celebration stops dispensing; the player presses again afterwards.
+      if (this.trigger.held) this.swallowed = true;
+      this.trigger.cancel();
+    }
     if (this.trigger.due(this.simTime)) {
       const x = this.dropperX;
       const fever = this.pressure.inFever;
@@ -222,7 +235,8 @@ export class Game {
     on(window, 'keydown', (e) => {
       if (e.code === 'Space') {
         e.preventDefault();
-        this.press();
+        // The trigger streams while held; OS key repeat must not count as new presses.
+        if (!e.repeat) this.press();
       } else if (e.code === 'KeyC') {
         // The cabinet's credit button; its 1.5 s hold-to-exit is handled outside the game, so ignore key repeats.
         if (!e.repeat) this.addCredits();
