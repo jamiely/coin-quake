@@ -1,7 +1,7 @@
 # Coin Quake: game design
 
 > Working title **Coin Quake**, repo `coin-quake` (`/Users/jamiely/code/coin-quake`, GitHub `jamiely/coin-quake`).
-> Status: design for review. Nothing is built yet.
+> Status: approved by the user (decisions 1a 2a 3a 4a 5a 6a 7a). Phase 1 next.
 
 A one-button 3D coin pusher for the Vermilion cabinet (portrait 1050x1680). It plays like Neon Reef
 (`/Users/jamiely/code/vicky`): you drop, the pusher shoves, and things fall off the front edge. Three things are
@@ -281,6 +281,115 @@ A 25 s state where the whole machine goes berserk: ×3 payouts, free coin stream
 lightning everywhere, the Bonus Wheel spinning on its own, and constant confetti. It ends with a "cool-down"
 sequence: steam venting, lights fading to cyan, and the tally rolling up on the counter.
 
+### 4.5a Close-up zooms
+
+The camera is an active director, not a fixed view. It **punches in** on the action and snaps back, like a
+sports replay:
+
+- **Snap zooms** (0.15 s in, 0.4 s hold, 0.5 s ease out) onto: a coin in the Lucky Slot, a prize landing, a
+  coin entering a warp, the last coin before a breakthrough, the wheel's pointer as it stops.
+- **Edge cam:** a low close-up along the front edge as a prize teeters, with slow-mo (§4.4).
+- **Split-second freeze-frame:** on the biggest hits the frame freezes, desaturates, a comic halftone burst
+  appears behind the object with a label (`LUCKY!`, `JACKPOT!`), then it whips back to full speed.
+- **Picture-in-picture:** when two things happen at once (a warp while a prize teeters), the second gets a
+  small inset "replay" window in a comic panel frame, so nothing is missed.
+- **Rules:** at most one full zoom per 2 s, zooms never start while the player's coin is mid-air over the gates,
+  and the home framing always returns within 1.5 s, so the playfield stays readable.
+
+### 4.5b Special moves (fighting-game style)
+
+Big events are performed as **special moves** by the cast, staged like a fighting-game super: a
+screen-darkening freeze, a character cut-in, a move name, then an over-the-top attack on the machine.
+
+- **The super flash:** the screen dims to 30%, a speed-line background sweeps in, and a diagonal **cut-in
+  panel** slides across with the character's face (eyes glinting), a move name in huge outlined letters, and a
+  bass "KSHHH" hit. That takes 0.6 s, then the action plays.
+- **Moves:**
+
+  | Move | Who | Trigger | Animation |
+  |---|---|---|---|
+  | **Hundred-Hand Slap** | Bolt | Combo ×25 | Bolt jumps off the dropper and slaps the pile in a blur of arms; afterimages, impact stars on every hit, and the pile shoves forward in pulses |
+  | **Rocket Uppercut** | Bolt | Lucky Slot | Bolt drills up through the Works with a flaming fist; every peg it passes pays out and flashes |
+  | **Gear Grinder Spin** | Bolt | Gear Bonus | Bolt spins like a top along the shelf; coins spiral out in a vortex |
+  | **Quake Stomp** | Professor Pockets | QUAKE | She leaps out of her window and ground-pounds the cabinet. The whole machine jumps, the camera bounces, and coins fly off every surface (this starts Fever) |
+  | **Kamehamecoin** | Professor Pockets | Avalanche | She charges a glowing coin beam (a rising whine, the screen shaking more and more) and fires it across the tray, which shoves the whole pile |
+  | **Final Mint** | Both (tag-team super) | Breakthrough | A double cut-in; Bolt is hurled down like a meteor and smashes through the floor (this starts the breakthrough fall) |
+
+- **Fighting-game language everywhere:** a hit counter (`12 HITS!`) during multi-hit moves, a
+  `K.O.!`-style stamp when a prize falls (`K.O.`, `PERFECT`, `FLAWLESS` if no coins went off the sides), and a
+  `ROUND 2` / `FIGHT!` banner when a new floor starts.
+- **Animation:** the characters are 2D cartoon sprite sheets (anticipation, action and recovery frames, with
+  smear frames) on billboards in the 3D scene, so moves stay cheap and expressive. Each move is under 3 s, and the
+  sim resumes as soon as the move connects.
+
+### 4.5c Unhinged mode
+
+The game should feel a little bit crazy, as if the machine has a mind of its own and it is not well. Random
+nonsense keeps the screen surprising, and it gets more frequent as pressure rises (every 40–90 s at tier 0, every
+10–20 s at tier 3).
+
+- **Machine tantrums:** the cabinet sneezes a cloud of coins; the gauge eyes go cross-eyed and spin; the topper
+  hiccups and the whole frame jumps; the counter briefly counts *backwards* in panic, then corrects with a
+  sheepish "boing".
+- **Cameos:** a cartoon pigeon lands on the dropper and rides it; a tiny UFO abducts one coin and returns it as
+  10; a shark fin swims through the coin pile; a giant hand reaches in from off-screen and flicks a coin.
+- **Physics gags:** coins briefly turn to jelly and wobble; gravity flips for one second ("WHOOPS") and the pile
+  floats, then crashes down; a coin grows to 10x size and rolls through the pile like a boulder.
+- **Visual madness during Fever:** the screen tilts like a Dutch angle, the background explodes into a
+  rainbow kaleidoscope, rainbow-trail coins, disco ball and dancing silhouettes, and the cast goes into
+  victory dances.
+- **Rules for the crazy:** gags never cost the player (they pay a little or are neutral), never cover the tray
+  for more than 1 s, and none repeats in a row. Each is in the debug menu with a "trigger now" button.
+
+### 4.5d Brainrot and pop culture
+
+The machine is infested with internet brainrot. A roster of meme creatures ("the Rotlings") lives in the
+cabinet, shows up in gags and events, and gets its own collectible prizes.
+
+**IP rule:** this repo and its releases are public, so every character is our own drawing and our own name, in
+the *style* of a meme and never a copy of someone's character or logo. The Italian-brainrot format (an absurd
+hybrid creature with a sing-song fake-Italian name, announced in a dramatic voice) is a format, not a
+character, and that is what we borrow. We never use real brand logos, or named franchise characters such as Skibidi Toilet, Mario or
+Pokémon.
+
+#### The Rotlings (original brainrot cast)
+
+| Rotling | Bit | Where it shows up |
+|---|---|---|
+| **Coinzilla Spaghettini** | A tiny kaiju made of spaghetti with a coin for a head | Stomps across the tray during Avalanche; each footstep shoves the pile |
+| **Bombardino Pizzarino** | A pizza-slice bomber plane | Flies over the Works and carpet-bombs coins (a Coin Shower variant) |
+| **Tunga Tunga Tostino** | A wooden toaster with a bat that bonks things on a beat | Bonks the pusher in rhythm with the music; each bonk is a mini-shove |
+| **Ballerina Pistachina** | A pistachio ballerina | Pirouettes on the Prize Pedestal and spins the prize toward the edge |
+| **Frigo Frigorino** | A fridge with flamingo legs | Opens its door and dumps frosty coins (Ice Vault floor host) |
+| **Gnocchi Gangster** | A gnocchi in a fedora, with sunglasses | Steals a coin, then drops 10 in apology ("mi dispiace") |
+| **Sahur Drum Bean** | A coffee bean banging a drum | Drums the countdown before Quake: 3 beats, then STOMP |
+| **Tralalino Sneakerfish** | A fish wearing three huge sneakers | Swims through the coin pile like the shark fin, with a squeak per step |
+
+- **Intro cards:** the first time a Rotling appears in a session it gets a fighting-game-style **name card**:
+  freeze, a dramatic zoom, its name in giant wobbly letters, and a synthesized "announcer" chord stinger.
+  Repeat appearances skip the card.
+- **Collectible Rotling figures:** each one is also a rare prize (a chunky vinyl-figure token) that can land on
+  the tray. Push one off and it joins the Prize Shelf. Collect all 8 for a **Rot Council** super event: every
+  Rotling appears at once and the machine loses its mind for 15 s.
+
+#### Pop-culture riffs (parodies, never the real thing)
+
+- **Gaming:** a **combo announcer** cadence ("DOUBLE KILL... TRIPLE... COIN-TACULAR!"); a **"FINISH HIM"**-style
+  prompt before a prize falls (`PUSH IT!`); a **battle-royale storm** event where the edge of the tray closes in
+  and pushes coins to the center; a **speedrun timer** that pops up during warps (`WR PACE!`); a **loot-box
+  crate** prize that opens with a rarity-color beam (common grey to legendary gold).
+- **Internet:** an **"it's over 9000"**-style scouter that reads the combo and explodes; a **stonks**
+  arrow when the counter climbs fast; **"bro really said"** captions on gags; **"W" and "L" stamps** for
+  coins that score or fall off the sides; an **"aura +1000"** popup on Lucky Slot hits; **sigma
+  stare** freeze-frames on a perfect drop; a **"skill issue"** caption on side losses (gentle, never insulting).
+- **Movies and TV, as parodies:** a **heist** Breakthrough variant (laser grid, a "we're in" caption, a
+  safe-cracking dial); a **kaiju** floor alert with an emergency-broadcast crawl along the bottom; a
+  **game-show** wheel host voice for the Bonus Wheel; **"previously on Coin Quake"** recaps in attract mode.
+- **Music:** the Fever track has a **beat drop** with an airhorn-style synth blast, and a **phonk-style** remix
+  plays in Overdrive.
+- **Rotating:** memes age fast, so captions and gag text live in one data file (`src/content/memes.ts`) that
+  is easy to update without touching code.
+
 ### 4.6 Title cards
 
 Every major event opens with a 0.8 s title card: big chunky 3D-ish text that slams in with shake and dust
@@ -413,6 +522,10 @@ A built-in **perf HUD** (`?debug=1`) shows fps, ms per subsystem, body count, pa
 | Two music beds | Adaptive stem music by tier, a combo pitch ladder, event stingers |
 | Static cabinet | The machine grows: parts get installed as you score |
 | HUD as DOM panels | HUD is part of the machine (flip counter, gauge, bank tube) |
+| A fixed camera | A camera that directs itself: snap zooms, edge cam, freeze-frames, replay insets |
+| No characters doing anything | Fighting-game special moves with super-flash cut-ins, hit counters and K.O. stamps |
+| No personality | A brainrot cast (the Rotlings) with name cards, collectible figures and a Rot Council super, plus pop-culture parodies |
+| Predictable | Unhinged gags: machine tantrums, cameos, gravity flips, giant coins |
 | One machine forever | Six themed floors you smash down through, plus warp portals and bonus worlds |
 | Glossy neon realism, no characters | A cartoon world: toon shading, ink outlines, a reacting cast (Professor Pockets, Bolt), comic POW bursts |
 | Calm attract | Cinematic attract tour with a scripted mini-Quake |
