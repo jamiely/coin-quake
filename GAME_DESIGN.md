@@ -26,11 +26,33 @@ climbs, the machine looks and sounds more unstable: needles shake, steam vents, 
 up. At 100% it **QUAKES**: the cabinet erupts into Fever mode (§4.5). This gives the whole game one readable
 arc: calm → rattling → overload → explosion → calm again.
 
-- **Palette:** deep navy cabinet, brass and copper trim, hot magenta and cyan neon, gold coins. Red and white
-  hazard stripes appear only during escalation, so they keep their meaning.
-- **Characters:** none needed. The machine is the character: googly gauge "eyes" on the topper, and a big lever
-  arm that "breathes" in attract mode. If we want a mascot later, a small robot ("Bolt") can ride the dropper.
-- **Original work:** procedural art and synthesized sound, like Neon Reef. No borrowed logos or audio.
+### Art style: cartoony, like Lumberjack and Bajillionaire
+
+Not Neon Reef's glossy realism. Think a Saturday-morning cartoon machine: chunky rounded shapes, thick dark
+outlines, flat bright colors with one shadow tone, exaggerated proportions, and everything a little wobbly and
+alive. The reference is Lumberjack's art (`lumberjack/lumberjack2/docs/game-screenshot.png`): bold ink outlines,
+saturated greens and oranges, a carved chunky title logo, and a big-eyed friendly character.
+
+- **Rendering:** 3D with **toon shading** (`MeshToonMaterial` with a 3-step gradient ramp) and **ink outlines**
+  (inverted-hull outlines on the large pieces, plus a cheap screen-space edge pass on the whole frame if the budget
+  allows). Bloom stays, but only on coins, lights and effects, so the cartoon reads clean and isn't hazy.
+- **Shapes:** fat, bevelled, slightly irregular. Gears have big teeth, pipes are fat and bendy, rivets are oversized,
+  the coins are thick, chunky gold discs with a star stamp and a white highlight "glint" sprite.
+- **Palette:** sunny gold coins; a cherry-red and cream cabinet with mint-green and sky-blue accents; dark plum
+  outlines (never pure black). Hazard stripes in yellow and black appear only during escalation.
+- **Characters:** the cast carries the cartoon feel.
+  - **Professor Pockets,** the mad inventor: wild white hair and goggles. She pops up in a window on the topper and
+    reacts to everything: cheering, panicking at high pressure, wiping her brow, fainting on a jackpot.
+  - **Bolt,** a small round robot who rides the dropper carriage and "throws" each coin with a little animation.
+  - **The machine itself** has googly gauge eyes on the topper that look at the action, and a big lever arm that
+    "breathes" in attract mode.
+- **Cartoon effects:** juice gets drawn in the cartoon language too: comic impact stars and "POW"/"KA-CHING"
+  burst bubbles, speed lines on fast coins, puffy cartoon smoke and steam, squash and stretch on everything, wobble
+  when something gets hit, and bouncy text with outlines.
+- **Assets:** 2D painted art (backdrop wall, title logo, character sprite sheets, burst bubbles) drawn or
+  AI-generated in Lumberjack's style and used as textures and sprites in the 3D scene. The machine geometry stays
+  procedural so it can move and react. Sound stays synthesized.
+- **Original work:** no borrowed logos, characters or audio.
 
 ## 2. Core loop
 
@@ -140,6 +162,64 @@ Events fire from the Bonus Wheel, pressure thresholds, or prize pushes. Only one
 | **Golden Gear Jackpot** (major) | Push the Golden Gear off | Full jackpot show (§4.7); pays the progressive jackpot | — |
 | **QUAKE / Fever** (major) | Pressure 100%, wheel QUAKE | 25 s Fever: everything ×3, wall bumpers up, dropper swings fast, coin stream free (holding drops without spending), constant light show | Hold to spray |
 | **Overdrive** (meta) | 3 Quakes in one session | The cabinet "explodes": a white-out, then a remixed, gold-plated machine for 60 s with ×5 everything | Hold to spray |
+| **Warp** (major) | A coin enters an open warp portal | The camera dives through the portal into a 20–30 s bonus world (§3.6.3), then pops back out | Depends on the world |
+| **Breakthrough** (meta) | The level's Crack meter fills | The tray floor shatters and the whole game falls to the next level (§3.6.1) | — |
+
+### 3.6 Levels, breakthroughs and warps
+
+The factory is a tower of floors, and you dig **down** through it. Each floor is a new machine with its own
+look, contraptions, music and prize. Getting to the next floor is the biggest moment in the game.
+
+#### 3.6.1 Breaking through
+
+- Each level has a **Crack meter** on the tray floor itself: hairline cracks spread across the floor as you
+  score, so progress is drawn right in the playfield. Prizes pushed off and Quakes crack it the most.
+- When it fills, a **Breakthrough** fires (~5 s, weight 5):
+  1. The floor groans; cracks glow orange; Professor Pockets panics in her window; the pile jiggles.
+  2. Hit-stop, then the floor **shatters** into chunky cartoon tiles. The whole pile (coins, prizes, everything)
+     falls, and the camera falls with it, with speed lines and debris flying past.
+  3. A whoosh through a short "between floors" shaft (pipes, signs: `FLOOR 2: THE CANDY WORKS`).
+  4. Everything crash-lands onto the new level's tray: max shake, a dust ring, coins bouncing everywhere,
+     a `LEVEL 2!` title card. The coins you had carry over, so the new floor starts with a big pile and a payday.
+- The pressure gauge resets, the next Crack meter starts, and the new floor's parts install one by one, so
+  every level has its own little "the machine grows" arc (§5.2).
+
+#### 3.6.2 The floors
+
+Six themed floors. Each keeps the core (dropper, gates, pusher, chute and counter) and swaps in 2–3 signature
+contraptions, a palette, a music key and tempo, and a level prize. After floor 6 the game loops to floor 1 in
+"gold" with ×2 values, so the shift never ends.
+
+| # | Floor | Look | Signature contraptions | Level prize |
+|---|---|---|---|---|
+| 1 | **The Mint** | Brass, cream and cherry red | Coin Press, Gear Wheel, Spinner Pegs | Golden Gear |
+| 2 | **The Candy Works** | Pink, mint, sprinkles | Taffy pullers that stretch and fling coins, a gumball wheel, a chocolate conveyor | Gumball Crown |
+| 3 | **The Volcano Boiler** | Orange, charcoal, lava glow | Lava geysers that launch coins up, a rotating cauldron, steam pistons | Magma Gem |
+| 4 | **The Ice Vault** | Sky blue, white | Slippery ice tray (coins slide further), a snowball roller, icicle flippers that break | Frozen Diamond |
+| 5 | **The Space Lab** | Purple, neon green, stars | Low-gravity zone (coins float), a UFO claw that grabs and drops coins, a rocket that blasts off with a coin load | Moon Rock |
+| 6 | **The Treasure Core** | Gold everywhere | Every earlier signature in one machine, a giant piggy bank that bursts | The Mother Lode (progressive jackpot) |
+
+#### 3.6.3 Warps
+
+Warp portals are swirling cartoon vortexes (spiral texture, sparkle rim, and a slurping sound when a coin goes
+in).
+
+- **Coin warps (minor, always on from floor 2):** paired portals in the Works. A coin that falls into the blue
+  portal pops out of the orange one somewhere else, with a puff and a speed-line burst. One pair warps coins
+  straight onto the lower tray's front edge, which is a jackpot route worth aiming for. The pairs swap
+  positions every 30 s, so the aim target keeps moving.
+- **Warp gate (major):** the Bonus Wheel and the Lucky Slot can open a big portal in the center of the Works for
+  10 s. Drop a coin in and the camera **dives through it** (zoom, spiral, white-out) into a bonus world.
+- **Bonus worlds** (20–30 s each, one button, then you pop back out of the portal with the winnings raining down
+  onto the tray):
+  - **Coin River:** a waterfall of coins pours down; tap to swing a bucket under the biggest streams.
+  - **Sky Drop:** you're a coin falling through clouds of bumpers; holding steers left and releasing drifts right.
+    Every bumper is cash.
+  - **Piggy Smash:** a giant piggy bank; tap rhythmically to hammer it as it cracks. The faster you tap, the more
+    coins it bursts into.
+  - **Floor Skip:** rare. You fall straight through the next floor (a breakthrough without filling the meter).
+- **Warp juice:** the camera FOV stretches like a rubber band, a spiral wipe transitions in and out, colors invert
+  for a frame, and the music pitches up through the dive and drops back on exit.
 
 ## 4. Juice
 
@@ -236,9 +316,13 @@ input, remembered mute).
 
 The cabinet has no accounts, so progression is in-session and visible:
 
-- **Machine upgrades:** every 1,000 POINTS unlocks the next machine part with a short "install" animation (a
-  crane lowers it in): 1) Copper Pipe Loop, 2) Tesla Coils, 3) Coin Elevator, 4) Conveyor, 5) Cannon event, 6)
-  Golden Gear on the pedestal. The machine starts simpler and visibly grows more over the top as you play.
+- **Levels:** the main progression. You break down through six floors (§3.6); the current floor number and its
+  name sit on the topper. A typical session reaches floor 2–3 in 10 minutes. The floor you reached is part of the
+  high score.
+- **Machine upgrades within a floor:** the floor's parts install one by one as the Crack meter fills, each with a
+  short "install" animation (a crane lowers it in). On floor 1 that is: 1) Copper Pipe Loop, 2) Tesla Coils,
+  3) Coin Elevator, 4) Conveyor, 5) Cannon event, 6) Golden Gear on the pedestal. Each floor starts simpler and
+  visibly grows more over the top before it breaks.
 - **Prize shelf** fills with trophies won.
 - **High score** (top 5, local storage) shown on the attract loop, with 3-letter initials entered by one
   button (letters cycle, tap to confirm; times out to `AAA`).
@@ -313,6 +397,7 @@ GT 1030 / integrated-class GPU (the Lavender cabinet's GPU) and measure on the c
 | Lights | Hemisphere + 1 key + ≤ 4 point lights; LED "lights" are emissive and bloom, not real lights |
 | Memory | ≤ 400 MB; no texture over 2048; all art procedural or atlas |
 | Audio | ≤ 24 voices; coin clinks capped at 6 per 100 ms |
+| Levels | One floor loaded at a time. The next floor builds during the breakthrough fall (≤ 1 s of the shaft), and the old one is disposed. Bonus worlds are tiny separate scenes; the main physics world pauses while a warp runs |
 
 A built-in **perf HUD** (`?debug=1`) shows fps, ms per subsystem, body count, particle count and draw calls, and a
 **stress preset** (Fever plus jackpot plus 350 coins) checks the worst case. CI runs the Electron smoke test.
@@ -328,6 +413,8 @@ A built-in **perf HUD** (`?debug=1`) shows fps, ms per subsystem, body count, pa
 | Two music beds | Adaptive stem music by tier, a combo pitch ladder, event stingers |
 | Static cabinet | The machine grows: parts get installed as you score |
 | HUD as DOM panels | HUD is part of the machine (flip counter, gauge, bank tube) |
+| One machine forever | Six themed floors you smash down through, plus warp portals and bonus worlds |
+| Glossy neon realism, no characters | A cartoon world: toon shading, ink outlines, a reacting cast (Professor Pockets, Bolt), comic POW bursts |
 | Calm attract | Cinematic attract tour with a scripted mini-Quake |
 
 The north star: **every single press makes something happen on screen within 200 ms,** even at tier 0 (claw
