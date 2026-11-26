@@ -17,8 +17,4 @@ export class Rng {
   range(min: number, max: number): number {
     return min + (max - min) * this.next();
   }
-
-  sign(): 1 | -1 {
-    return this.next() < 0.5 ? -1 : 1;
-  }
 }

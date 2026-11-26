@@ -491,14 +491,15 @@ overlay box.
 
 ## 7. Performance budget (cabinet PC)
 
-**Assumption:** Vermilion's GPU was not readable over SSH (an access-denied error in #499). Plan for a
-GT 1030 / integrated-class GPU (the Lavender cabinet's GPU) and measure on the cabinet in Phase 1.
+**Hardware (read from the cabinet's registry over SSH):** Vermilion has an **NVIDIA GeForce RTX 3060** and an
+**AMD Ryzen 5 5600** (6 cores, 12 threads). The GPU has plenty of headroom; the binding constraint is the
+single-threaded physics step on the CPU. The game still measures frame time on the cabinet in Phase 1.
 
 | Budget | Target |
 |---|---|
 | Frame rate | 60 fps locked at 1050x1680; drop to `pixelRatio` 0.85 automatically if frame time > 14 ms sustained |
 | Frame time | ≤ 16.6 ms total: physics ≤ 3 ms, render ≤ 9 ms, game and juice ≤ 1.5 ms, headroom ≥ 3 ms |
-| Physics bodies | ≤ 350 dynamic coins (Rapier cylinders); sleeping enabled; coins in the tray's back third sleep. Neon Reef measured 0.4 ms/step at ~150 bodies at 120 Hz; coins at 60 Hz with 2 substeps should fit at 350. Hard cap: the oldest settled coins merge into a static "pile" mesh if exceeded. |
+| Physics bodies | ≤ 350 dynamic coins as Rapier cylinders, using the SIMD build (`@dimforge/rapier3d-simd-compat`), 60 Hz, 1 substep, 2 solver iterations. Measured with `scripts/bench-coins.mjs` on the dev Mac (M-series): 250 coins avg 2.0–2.7 ms per step, 350 coins avg 5.5–6.4 ms (worst 13–22 ms while coins fall off). The non-SIMD build is about 2x slower; balls are far cheaper but don't stack like coins. Plan: target about 250 live coins and treat 350 as the cap. Beyond the cap, the oldest coins at the back of the pile turn static ("pile freeze"), and they wake when the pusher or an event disturbs them. |
 | Draw calls | ≤ 150: coins, LEDs, pegs, particles and bolts are each one `InstancedMesh` |
 | Particles | ≤ 4,000 live in one instanced or Points pool; requests beyond the cap are dropped, lowest weight first |
 | Post | Bloom at half resolution (one `UnrealBloomPass`, as in Neon Reef); flash and chromatic pulse in one cheap full-screen pass |

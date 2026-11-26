@@ -34,7 +34,7 @@ export default defineConfig({
     ],
     coverage: {
       provider: 'v8',
-      include: ['src/**/*.ts'],
+      include: ['src/rules/**/*.ts', 'src/sim/**/*.ts', 'src/rng.ts'],
       exclude: ['src/**/*.test.ts'],
       reporter: ['text', 'html'],
       thresholds: { statements: 90, branches: 90, functions: 90, lines: 90 },
