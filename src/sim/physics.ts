@@ -182,13 +182,14 @@ export class PhysicsWorld {
     this.nextDump = this.time + this.rng.range(DUMP.minGap, DUMP.maxGap);
     const room = Math.max(0, MAX_COINS - this.coins.length);
     const count = Math.min(DUMP.coins, room);
-    const cx = this.rng.range(-6, 6);
+    // A column over the middle of the tray, clear of the rails and the open front corners, falling straight down. Dump
+    // coins don't blast what they land on: 45 blasts at once threw the pile over the sides (about 70% of the dump).
+    const cx = this.rng.range(-3, 3);
     for (let i = 0; i < count; i++) {
       const kind = this.rng.next() < 0.15 ? pickKind(this.rng.next()) : 'standard';
-      const body = this.addCoin(cx + this.rng.range(-DUMP.spread, DUMP.spread) * 0.8, 26 + this.rng.range(0, 14), this.rng.range(-6, 6), null, kind);
-      body.setLinvel({ x: this.rng.range(-20, 20), y: -150 - this.rng.range(0, 80), z: this.rng.range(-10, 10) }, true);
+      const body = this.addCoin(cx + this.rng.range(-DUMP.spread, DUMP.spread), 26 + this.rng.range(0, 14), this.rng.range(-8, 2), null, kind);
+      body.setLinvel({ x: 0, y: -120 - this.rng.range(0, 60), z: 0 }, true);
       body.setAngvel({ x: this.rng.range(-10, 10), y: 0, z: this.rng.range(-10, 10) }, true);
-      this.falling.set(body, 150);
     }
     return [{ type: 'dump', count }];
   }

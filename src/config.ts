@@ -46,7 +46,7 @@ export const FIGURINES = {
  * Random coin dumps ("randomly dump a bunch of coins on the playfield"): every so often a siren sounds, then a load
  * of coins crashes onto the tray from above. Seconds of simulated time.
  */
-export const DUMP = { minGap: 45, maxGap: 90, warning: 1.6, coins: 45, spread: 13 };
+export const DUMP = { minGap: 45, maxGap: 90, warning: 1.6, coins: 45, spread: 9 };
 
 /** The lower tray: coins pushed past `front` fall off and pay; past the open corners they fall off the sides. */
 export const TRAY = {
