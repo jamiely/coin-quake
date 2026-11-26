@@ -100,6 +100,39 @@ export class Sound {
     this.tone(f * 1.51, 0.05, 0.04 * intensity, 'sine', undefined, delay);
   }
 
+  /** Peg ping: a bright bell whose pitch depends on the peg (a xylophone across the field), slightly varied. */
+  peg(index: number): void {
+    const semis = PENTATONIC[index % 5]! + 12 * (Math.floor(index / 5) % 2);
+    const f = 880 * 2 ** (semis / 12) * (0.98 + Math.random() * 0.04);
+    this.tone(f, 0.14, 0.09, 'triangle');
+    this.tone(f * 2.01, 0.08, 0.03, 'sine');
+  }
+
+  /** Gear fling: a ratchet clatter and a spring twang. */
+  ratchet(): void {
+    for (let i = 0; i < 4; i++) this.noiseHit(0.025, 2200 + i * 200, 0.1, 'bandpass', i * 0.022);
+    this.tone(240 * (0.9 + Math.random() * 0.2), 0.2, 0.08, 'triangle', 520);
+  }
+
+  /** The pipe loop: a rising whoosh in, a fast slide-whistle out. */
+  whoosh(out: boolean): void {
+    this.noiseHit(out ? 0.25 : 0.4, out ? 2600 : 1200, 0.12, 'bandpass');
+    if (out) this.tone(500, 0.22, 0.08, 'sine', 1600);
+  }
+
+  /** Flipper: a solenoid thwack. */
+  flipper(): void {
+    this.tone(95, 0.08, 0.3, 'square', 60);
+    this.noiseHit(0.05, 1800, 0.18, 'bandpass');
+  }
+
+  /** Tesla zap: crackling high noise plus a buzzing saw. */
+  zap(): void {
+    this.noiseHit(0.14, 6000, 0.12, 'highpass');
+    this.tone(110 + Math.random() * 40, 0.12, 0.07, 'sawtooth', 70);
+    this.noiseHit(0.06, 9000, 0.08, 'highpass', 0.05);
+  }
+
   /** A front payout: a bright pickup on the combo ladder. Higher combos climb the scale. */
   payout(combo: number, hot: boolean): void {
     const step = Math.min(combo - 1, 24);

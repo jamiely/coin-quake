@@ -2,6 +2,7 @@ import RAPIER from '@dimforge/rapier3d-simd-compat';
 import { COIN, DROPPER, GRAVITY, IMPACT, MAX_COINS, PUSHER, RULES, SIM, TRAY } from '../config';
 import type { CoinTag } from '../rules/economy';
 import type { Rng } from '../rng';
+import { Works, type WorksEvent } from './works';
 
 export interface Coin {
   body: RAPIER.RigidBody;
@@ -31,7 +32,8 @@ export type SimEvent =
   | { type: 'frontExit'; tag: CoinTag | null; x: number }
   | { type: 'sideExit'; x: number }
   /** A dropped coin hit the pile: `speed` at impact, `hit` how many coins it blasted, `strength` 0..1. */
-  | { type: 'landed'; x: number; y: number; z: number; speed: number; hit: number; strength: number };
+  | { type: 'landed'; x: number; y: number; z: number; speed: number; hit: number; strength: number }
+  | WorksEvent;
 
 const EXIT_Y = -4;
 const SHELF_Y = PUSHER.height;
@@ -53,6 +55,9 @@ export class PhysicsWorld {
   private readonly falling = new Map<RAPIER.RigidBody, number>();
   /** Bodies blasted by an impact this step, with their blast strength, for the renderer's squash. */
   readonly blasted = new Map<number, number>();
+  /** The machinery between the gates and the shelf. */
+  readonly works: Works;
+  private readonly bodies: RAPIER.RigidBody[] = [];
 
   static async create(rng: Rng): Promise<PhysicsWorld> {
     await RAPIER.init();
@@ -69,6 +74,7 @@ export class PhysicsWorld {
       RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(0, PUSHER.height / 2, this.pusherFront - PUSHER.depth / 2),
     );
     this.world.createCollider(RAPIER.ColliderDesc.cuboid(TRAY.halfWidth - 0.05, PUSHER.height / 2, PUSHER.depth / 2).setFriction(0.4), this.pusher);
+    this.works = new Works(this.world, rng);
     this.fillTray();
   }
 
@@ -106,8 +112,13 @@ export class PhysicsWorld {
     }
     // `blasted` accumulates across steps until the renderer reads and clears it; cap it for headless runs.
     if (this.blasted.size > MAX_COINS) this.blasted.clear();
+    const works: WorksEvent[] = [];
+    this.bodies.length = 0;
+    for (const c of this.coins) if (c.body.translation().y > SHELF_Y + 2) this.bodies.push(c.body);
+    this.works.before(this.world.timestep, this.bodies, works);
     this.world.step();
-    const events = this.classify();
+    this.works.after(this.world.timestep, this.bodies, works);
+    const events: SimEvent[] = [...works, ...this.classify()];
     this.lastStepMs = performance.now() - t0;
     return events;
   }
@@ -118,10 +129,11 @@ export class PhysicsWorld {
       const coin = this.coins[i]!;
       const p = coin.body.translation();
       const fallSpeed = this.falling.get(coin.body);
-      if (fallSpeed !== undefined) {
+      if (fallSpeed !== undefined && !this.works.riding(coin.body)) {
         const vy = -coin.body.linvel().y;
         // Landed: its fall was stopped this step (it hit the shelf, the pile or another coin) low enough to count.
-        if (p.y < SHELF_Y + 6 && vy < fallSpeed * 0.5) {
+        // Below the Works (flippers sit at y ~8.4), so bumps on machinery are never taken for the landing.
+        if (p.y < SHELF_Y + 3.5 && vy < fallSpeed * 0.5) {
           this.falling.delete(coin.body);
           events.push(this.impact(coin.body, p, fallSpeed));
         } else {
@@ -136,6 +148,7 @@ export class PhysicsWorld {
       if (p.y >= EXIT_Y) continue;
       events.push(coin.edge === 'front' ? { type: 'frontExit', tag: coin.tag, x: p.x } : { type: 'sideExit', x: p.x });
       this.falling.delete(coin.body);
+      this.works.remove(coin.body);
       this.world.removeRigidBody(coin.body);
       this.coins[i] = this.coins[this.coins.length - 1]!;
       this.coins.pop();

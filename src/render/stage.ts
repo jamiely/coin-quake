@@ -8,6 +8,7 @@ import type { Juice } from '../juice';
 import type { Tier } from '../rules/pressure';
 import type { PhysicsWorld } from '../sim/physics';
 import { gaugeAngle, paintCounter, buildMachine, type Machine } from './machine';
+import { WorksView } from './works';
 import { coinFace } from './textures';
 import { PALETTE, fatten, outlineMat, toon } from './toon';
 
@@ -68,6 +69,8 @@ export class Stage {
   private lastRealTime = 0;
   private painted = '';
 
+  private works: WorksView | null = null;
+
   constructor(private readonly container: HTMLElement) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
@@ -124,6 +127,8 @@ export class Stage {
 
   update(physics: PhysicsWorld, s: StageState, time: number, realTime: number): void {
     this.machine.pusher.position.z = physics.pusherFront - PUSHER.depth / 2;
+    this.works ??= new WorksView(this.scene, physics.works.pegs.length);
+    this.works.update(physics.works, realTime);
     this.syncCoins(physics, realTime - this.lastRealTime);
     this.lastRealTime = realTime;
 

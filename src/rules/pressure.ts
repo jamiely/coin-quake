@@ -74,6 +74,11 @@ export class Pressure {
     return events;
   }
 
+  /** A coin hit the machinery (a peg, the gear, a flipper, the bonus slot): builds `amount` pressure. */
+  machine(amount: number): PressureEvent[] {
+    return this.gain(amount);
+  }
+
   /** Forces a QUAKE (debug, or a future Bonus Wheel segment). */
   quake(): PressureEvent[] {
     return this.gain(100);

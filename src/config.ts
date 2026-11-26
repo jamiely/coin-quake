@@ -49,7 +49,7 @@ export const IMPACT = {
   /** Random spin given to hit coins (rad/s), so they flip and tumble. */
   spin: 14,
   /** Landing speed (cm/s) at which the blast is full strength; slower landings scale down. */
-  fullSpeed: 260,
+  fullSpeed: 190,
   /** Hits within this distance of a side rail get no outward push. */
   railMargin: 4,
 };
@@ -67,6 +67,26 @@ export const DROPPER = {
   dwell: 1.18,
   /** Seconds between coins while the button is held (4 per second). */
   streamInterval: 0.25,
+};
+
+/**
+ * The Works: the machinery coins fall through between the gates and the shelf, inside the slab between the scraper
+ * wall (z -19) and the drop-zone glass (z -11.8). Each gate route meets a different machine: L the gear wheel, C the
+ * peg field and its BONUS slot, R the pipe loop; flippers catch everything at the bottom and Tesla coils zap passers-by.
+ */
+export const WORKS = {
+  z: -15.4,
+  halfDepth: 3.4,
+  gear: { x: -10.5, y: 15.5, hub: 2, reach: 5.4, paddles: 6, spin: 1.8, fling: 70 },
+  pegs: { rows: [21.5, 18.8, 16.1, 13.4], spacing: 5, halfSpan: 5, radius: 0.6, kick: 35 },
+  /** The BONUS slot under the peg field; a coin through it spins the bonus wheel. */
+  bonus: { x: 0, y: 10.6, halfWidth: 1.9 },
+  loop: { x: 11, y: 15, radius: 4, entryY: 20.4, time: 0.75, exit: { x: 5.6, y: 10.5, vx: -45, vy: -35 } },
+  flippers: { x: 12.8, y: 8.4, length: 6, rest: -0.42, up: 0.5, kick: { vx: 55, vy: -55 }, cooldown: 0.35 },
+  tesla: { x: 16.4, y: 14, range: 6.5, cooldown: 0.4 },
+  /** A coin above the shelf moving slower than this (cm/s) for `stuckTime` gets nudged loose. */
+  stuckSpeed: 3,
+  stuckTime: 0.9,
 };
 
 /** Three gates under the swing; one is HOT and doubles that coin's points. */

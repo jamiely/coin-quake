@@ -159,9 +159,13 @@ export class Game {
         for (const pe of events) this.fx.pressure(pe);
       } else if (e.type === 'sideExit') {
         this.fx.loss(e.x);
-      } else {
+      } else if (e.type === 'landed') {
         this.fx.land(e.x, e.y, e.z, e.strength, e.hit);
         for (const pe of this.pressure.landing()) this.fx.pressure(pe);
+      } else {
+        // The Works: every hit on the machinery reacts, and builds a little pressure.
+        this.fx.works(e);
+        for (const pe of this.pressure.machine(e.type === 'bonus' ? 6 : 0.4)) this.fx.pressure(pe);
       }
     }
   }

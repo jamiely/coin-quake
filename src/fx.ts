@@ -115,7 +115,7 @@ export class Fx {
         this.juice.fire('gear');
         this.sound.ratchet();
         this.particles.burst({ at, count: 12, color: '#ffb02e', speed: 40, size: 0.5, life: 0.35, gravity: -60 }, this.rand);
-        if (this.rand() < 0.35) this.popups.show('WHEE!', { x: e.x, y: e.y + 3, z }, { fill: '#fff1d6', ink: '#2b1533', size: 1.8, life: 0.6, rise: 6, tilt: 0.6 });
+        if (this.rand() < 0.35) this.popups.show('WHEE!', { x: e.x, y: Math.min(e.y + 2, 19), z }, { fill: '#fff1d6', ink: '#2b1533', size: 1.8, life: 0.6, rise: 3, tilt: 0.6 });
         break;
       case 'loopIn':
         this.sound.whoosh(false);
@@ -135,7 +135,7 @@ export class Fx {
         this.juice.fire('zap', 1, { x: e.side, y: 0 });
         this.sound.zap();
         this.particles.burst({ at, count: 22, color: '#bff4ff', speed: 38, size: 0.45, life: 0.22, drag: 6 }, this.rand);
-        if (this.rand() < 0.4) this.popups.show('ZZAP!', { x: e.x, y: e.y + 3, z }, { fill: '#bff4ff', ink: '#2b1533', size: 1.8, life: 0.5, rise: 6, tilt: 0.7 });
+        if (this.rand() < 0.4) this.popups.show('ZZAP!', { x: e.x, y: Math.min(e.y + 2, 19), z }, { fill: '#bff4ff', ink: '#2b1533', size: 1.8, life: 0.5, rise: 3, tilt: 0.7 });
         break;
       case 'bonus':
         this.juice.fire('bonus', 2);

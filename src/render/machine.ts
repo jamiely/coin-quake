@@ -81,7 +81,8 @@ export function buildMachine(scene: THREE.Scene): Machine {
   glass.position.set(0, (DROPPER.y + PUSHER.height + 6) / 2, DROPPER.z + 4.3);
   scene.add(glass);
   // Glass frame bars, so the pane reads as glass in a cartoon.
-  scene.add(box(2 * hw, 1.2, 1, mint, 0, PUSHER.height + 6, DROPPER.z + 4.3));
+  // A low frame rail at the glass foot, under the flippers, so it never crosses the machinery.
+  scene.add(box(2 * hw, 0.8, 1, mint, 0, PUSHER.height + 1.6, DROPPER.z + 4.3));
 
   // Swing rail and the brass carriage with a two-finger claw.
   scene.add(box(2 * hw + 2, 1.4, 1.4, toon(PALETTE.goldDark), 0, DROPPER.y + 5, DROPPER.z));
