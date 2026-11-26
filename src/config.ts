@@ -24,6 +24,8 @@ export const COIN_KINDS = {
   lead: { scale: 1.2, thick: 1.6, density: 26, value: 2, pitch: 0.55, odds: 5, face: '#8a8fa8', rim: '#4b4f63' },
   gold: { scale: 1.1, thick: 1.1, density: 9, value: 5, pitch: 1.25, odds: 4, face: '#fff08a', rim: '#ffb800' },
   rainbow: { scale: 1.2, thick: 1.1, density: 7, value: 10, pitch: 1.35, odds: 1, face: '#ffffff', rim: '#ff5ad1' },
+  /** The starting structure's coins: bright mint so the build stands out from the gold pile. Never dropped. */
+  build: { scale: 1, thick: 1, density: 7, value: 2, pitch: 1.1, odds: 0, face: '#7ff0c6', rim: '#e8344e' },
 } as const;
 export type CoinKind = keyof typeof COIN_KINDS;
 
@@ -48,11 +50,31 @@ export const FIGURINES = {
  */
 export const DUMP = { minGap: 45, maxGap: 90, warning: 1.6, coins: 45, spread: 9 };
 
+/**
+ * Three tiers (the user: "add a couple more layers", "make the ground extend farther out"). Coins land on the top shelf
+ * (the upper pusher's top), are scraped onto the middle deck, which its own pusher shoves over a drop onto the lower
+ * tray, whose front edge pays. `y` is each surface's height; the lower tray is the deepest and slowest.
+ */
+export const DECK = {
+  /** The middle deck: the floor the upper pusher sweeps; its front face is a step down to the lower tray. */
+  y: 0,
+  thickness: 1,
+  front: 8,
+};
+
+/**
+ * The lower pusher: a low block on the lower tray that slides out from under the deck's step. Coins that drop onto its
+ * top are scraped off by the step face as it retracts, just like the shelf and the scraper wall above. Its own rhythm.
+ */
+export const LOWER = { height: 1.7, depth: 16, frontMin: 8, frontMax: 13, period: 3.3 };
+
 /** The lower tray: coins pushed past `front` fall off and pay; past the open corners they fall off the sides. */
 export const TRAY = {
   halfWidth: 18,
   back: -32,
-  front: 10,
+  /** Floor height: below the middle deck, so coins drop a step. */
+  y: -3,
+  front: 26,
   /** Side rails stop this far short of the front edge, so coins at the corners are lost. */
   openCorner: 5,
   railHeight: 3,
@@ -128,6 +150,30 @@ export const WORKS = {
 /** Three gates under the swing; one is HOT and doubles that coin's points. */
 export const GATES = ['L', 'C', 'R'] as const;
 export type GateIndex = 0 | 1 | 2;
+
+/**
+ * Runs (the user: "game lasts too long, you can jam coins and never run out"). A bankroll of coins, refilled only by
+ * coins pushed off the front, Last Call after a few minutes, then a finale sweep and the high-score table. Same rules
+ * as Neon Reef's runs. Tuned with probes/runs.test.ts (see the numbers there).
+ */
+export const RUN = {
+  startStock: 150,
+  stockCap: 99,
+  /** Front-edge refills stop here; drop what's left. */
+  lastCallSeconds: 210,
+  /** Out of coins with none falling: tray spills in this window revive the run (the deep tray pays out slowly). */
+  suddenDeathSeconds: 15,
+  /** Final push after the last coin: at least this long, then until the tray calms down (capped). */
+  sweepSeconds: 4,
+  sweepMaxSeconds: 12,
+  /** Pusher stroke rate multiplier during the sweep. */
+  sweepPusherSpeed: 2.5,
+  /** A press is ignored this long after a run ends, so a held button doesn't skip the result. */
+  overLockSeconds: 1.5,
+  lowStock: 10,
+  /** Coins a BONUS slot hit adds to the stock. */
+  bonusCoins: 5,
+};
 
 export const RULES = {
   startCoins: 50,

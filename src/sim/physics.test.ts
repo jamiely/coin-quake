@@ -73,10 +73,13 @@ describe('PhysicsWorld', () => {
     expect(firstEdge({ x: 0, z: TRAY.front + 1 }, { x: hw + 1, z: TRAY.front + 2 })).toBe('front');
   });
 
-  it('refuses drops at the body cap', async () => {
+  it('a full machine retires a resting back coin so drops always go in, and never exceeds the cap', async () => {
+    // The jam bug that happened: at the cap drops were refused and refunded, so a run after Last Call never drained.
     const world = await PhysicsWorld.create(new Rng(1));
     while (world.coins.length < MAX_COINS) world.drop(0, null);
-    expect(world.drop(DROPPER.halfSwing, null)).toBeNull();
+    run(world, 2);
+    expect(world.drop(DROPPER.halfSwing, null)).not.toBeNull();
+    expect(world.coins.length).toBeLessThanOrEqual(MAX_COINS);
     world.dispose();
   });
 });

@@ -1,4 +1,10 @@
-import { RULES, type GateIndex } from '../config';
+import { RULES, type CoinKind, type GateIndex } from '../config';
+
+/** Coins returned to the run's stock for one thing pushed off the front: bigger prizes pay more back. */
+export function refillFor(kind: CoinKind, figurine?: string): number {
+  if (figurine) return 5;
+  return kind === 'rainbow' ? 3 : kind === 'jumbo' || kind === 'gold' ? 2 : 1;
+}
 import type { Rng } from '../rng';
 
 /** What a coin carries from the gate it fell through to the edge it falls off. */
