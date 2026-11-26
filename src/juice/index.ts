@@ -5,10 +5,12 @@
  * - `ParticlePool`: one instanced draw call for sparks, confetti and debris.
  * - `PopupPool`: world-anchored outlined text that springs up and fades.
  * - `Overlay`: the full-screen flash and title cards (style with `juice.css`).
+ * - `Celebration`: a skippable stamp + counting tally card for the big moments.
  *
  * A game defines its recipe table, calls `juice.fire(event, weight)` on each event, multiplies its simulation dt by
  * `juice.timeScale`, offsets its camera by `juice.shake`/`juice.kick`/`juice.fovOffset`, and updates the pools.
  */
+export { Celebration, type CelebrationSpec } from './celebration';
 export { DEFAULT_TUNING, Juice, noise1, type JuiceTuning, type Recipe, type Shake, type Weight } from './core';
 export { Overlay } from './overlay';
 export { ParticlePool, type Burst } from './particles';

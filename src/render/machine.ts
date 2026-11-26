@@ -7,6 +7,8 @@ import { INK, PALETTE, outlined, toon } from './toon';
 export interface Machine {
   pusher: THREE.Group;
   carriage: THREE.Group;
+  /** Bolt, the little robot riding the carriage (eyes are children). */
+  bolt: THREE.Group;
   claw: THREE.Mesh[];
   laser: THREE.Mesh;
   gates: { plate: THREE.Mesh; lamp: THREE.MeshToonMaterial; hot: THREE.Mesh }[];
@@ -85,17 +87,19 @@ export function buildMachine(scene: THREE.Scene): Machine {
   scene.add(box(2 * hw + 2, 1.4, 1.4, toon(PALETTE.goldDark), 0, DROPPER.y + 5, DROPPER.z));
   const carriage = new THREE.Group();
   carriage.add(box(5, 3, 3, toon(PALETTE.gold), 0, 3, 0));
-  const bolt = new THREE.Mesh(new THREE.SphereGeometry(1.6, 20, 14), toon(PALETTE.sky));
+  const bolt = new THREE.Group();
   bolt.position.set(0, 5.8, 0);
-  outlined(bolt, 0.3);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(1.6, 20, 14), toon(PALETTE.sky));
+  outlined(head, 0.3);
+  bolt.add(head);
   carriage.add(bolt);
   for (const eye of [-0.6, 0.6]) {
     const e = new THREE.Mesh(new THREE.SphereGeometry(0.42, 10, 8), new THREE.MeshBasicMaterial({ color: '#ffffff' }));
-    e.position.set(eye, 6.1, 1.35);
+    e.position.set(eye, 0.3, 1.35);
     const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 6), new THREE.MeshBasicMaterial({ color: INK }));
     pupil.position.set(0, 0, 0.32);
     e.add(pupil);
-    carriage.add(e);
+    bolt.add(e);
   }
   const claw: THREE.Mesh[] = [];
   for (const side of [-1, 1]) {
@@ -197,7 +201,7 @@ export function buildMachine(scene: THREE.Scene): Machine {
   gauge.position.set(hw - 2.5, DROPPER.y + 19.5, DROPPER.z + 7);
   scene.add(gauge);
 
-  return { pusher, carriage, claw, laser, gates, counter, edgeLights, sideLights, gauge: { group: gauge, needle, face: faceMat }, topper: topperMesh };
+  return { pusher, carriage, bolt, claw, laser, gates, counter, edgeLights, sideLights, gauge: { group: gauge, needle, face: faceMat }, topper: topperMesh };
 }
 
 /** Gauge dial: cream face, green-to-red arc over 240 degrees, ticks, and "PSI". */

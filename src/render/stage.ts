@@ -26,6 +26,8 @@ export interface StageState {
   /** Seconds of QUAKE fever left (0 when calm). */
   fever: number;
   combo: number;
+  /** A celebration is playing: Bolt cheers. */
+  cheering: boolean;
 }
 
 /** Background, marquee and chase speed per pressure tier (GAME_DESIGN.md §4.3). */
@@ -116,8 +118,20 @@ export class Stage {
     this.machine.pusher.position.z = physics.pusherFront - PUSHER.depth / 2;
     this.syncCoins(physics);
 
-    const { carriage, claw, laser, gates } = this.machine;
+    const { carriage, bolt, claw, laser, gates } = this.machine;
     carriage.position.x = s.dropperX;
+    // Drop recoil: the carriage kicks up and squashes, then springs back (damped); Bolt bounces a beat later.
+    const r = s.sinceDrop;
+    const spring = r < 0.5 ? Math.exp(-r * 9) * Math.cos(r * 38) : 0;
+    carriage.position.y = DROPPER.y + spring * 1.2;
+    carriage.scale.set(1 + spring * 0.25, 1 - spring * 0.3, 1 + spring * 0.25);
+    const hop = r < 0.6 ? Math.max(0, Math.sin(Math.min(1, (r - 0.05) / 0.35) * Math.PI)) : 0;
+    const dance = s.cheering ? 3.5 : s.fever > 0 ? 1.2 : 0;
+    const tempo = s.cheering ? 12 : 9;
+    bolt.position.y = 5.8 + hop * 1.4 + Math.abs(Math.sin(realTime * tempo)) * dance;
+    bolt.rotation.z = (dance ? Math.sin(realTime * tempo) * 0.35 : 0) + hop * 0.2 * Math.sign(Math.sin(r * 50));
+    const squish = 1 + 0.18 * Math.sin(Math.min(1, r / 0.12) * Math.PI);
+    bolt.scale.set(squish, 2 - squish, squish);
     const open = Math.max(0, 1 - s.sinceDrop / 0.18);
     claw.forEach((finger, i) => (finger.rotation.z = (i ? -1 : 1) * open * 0.6));
     laser.position.set(s.dropperX, (DROPPER.y + PUSHER.height) / 2, DROPPER.z);

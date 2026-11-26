@@ -77,6 +77,8 @@ export class Game {
 
   press(): void {
     this.sound.unlock();
+    // During a celebration the button skips it (once allowed) instead of dropping.
+    if (this.fx.skip()) return;
     this.trigger.press(this.simTime);
   }
 
@@ -180,6 +182,7 @@ export class Game {
         pressure: this.pressure.value,
         fever: this.pressure.fever,
         combo: this.pressure.combo,
+        cheering: this.fx.celebration.active,
       },
       this.simTime,
       now / 1000,
