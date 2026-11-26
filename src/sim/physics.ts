@@ -7,8 +7,24 @@ export interface Coin {
   body: RAPIER.RigidBody;
   /** The drop's tag; null for coins from the starting pile. */
   tag: CoinTag | null;
-  /** Which edge the coin went over, fixed the moment it drops below the tray top. */
+  /** Which edge the coin went over first, fixed the step it crosses one. */
   edge: 'front' | 'side' | null;
+  /** Position after the previous step, to order two crossings within one step. */
+  prev: { x: number; z: number };
+}
+
+/**
+ * The tray boundary crossed first going from `a` to `b`, or null while still over the tray. When one step crosses both
+ * (an open front corner), the boundary reached earlier along the step wins.
+ */
+export function firstEdge(a: { x: number; z: number }, b: { x: number; z: number }): 'front' | 'side' | null {
+  const hw = TRAY.halfWidth;
+  const side = Math.abs(b.x) > hw;
+  const front = b.z > TRAY.front;
+  if (!side || !front) return side ? 'side' : front ? 'front' : null;
+  const tSide = Math.abs(a.x) > hw ? 0 : (hw - Math.abs(a.x)) / Math.max(1e-9, Math.abs(b.x) - Math.abs(a.x));
+  const tFront = a.z > TRAY.front ? 0 : (TRAY.front - a.z) / Math.max(1e-9, b.z - a.z);
+  return tFront <= tSide ? 'front' : 'side';
 }
 
 export type SimEvent =
@@ -94,8 +110,11 @@ export class PhysicsWorld {
         const v = coin.body.linvel();
         events.push({ type: 'landed', x: p.x, z: p.z, speed: Math.hypot(v.x, v.y, v.z) });
       }
-      // Decide the edge as the coin drops past the tray top, before the fall can carry it under the other edge.
-      if (coin.edge === null && p.y < 0) coin.edge = Math.abs(p.x) > TRAY.halfWidth ? 'side' : p.z > TRAY.front ? 'front' : null;
+      // The first boundary crossed decides; a coin that drifts past the other edge while falling keeps it. One that
+      // only overhung an edge and was pushed back onto the tray starts over.
+      if (Math.abs(p.x) <= TRAY.halfWidth && p.z <= TRAY.front) coin.edge = null;
+      else coin.edge ??= firstEdge(coin.prev, p);
+      coin.prev = { x: p.x, z: p.z };
       if (p.y >= EXIT_Y) continue;
       events.push(coin.edge === 'front' ? { type: 'frontExit', tag: coin.tag, x: p.x } : { type: 'sideExit', x: p.x });
       this.falling.delete(coin.body);
@@ -109,7 +128,7 @@ export class PhysicsWorld {
   private addCoin(x: number, y: number, z: number, tag: CoinTag | null): RAPIER.RigidBody {
     const body = this.world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(x, y, z).setLinearDamping(0.3).setAngularDamping(0.8));
     this.world.createCollider(this.coinShape.setDensity(COIN.density).setFriction(COIN.friction).setRestitution(COIN.restitution), body);
-    this.coins.push({ body, tag, edge: null });
+    this.coins.push({ body, tag, edge: null, prev: { x, z } });
     return body;
   }
 

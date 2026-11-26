@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DROPPER, MAX_COINS, RULES, SIM, TRAY, COIN } from '../config';
 import { Rng } from '../rng';
-import { PhysicsWorld, type SimEvent } from './physics';
+import { PhysicsWorld, firstEdge, type SimEvent } from './physics';
 
 const run = (world: PhysicsWorld, seconds: number): SimEvent[] => {
   const events: SimEvent[] = [];
@@ -50,6 +50,26 @@ describe('PhysicsWorld', () => {
     expect(events).toContainEqual(expect.objectContaining({ type: 'sideExit' }));
     expect(events.filter((e) => e.type === 'frontExit' && e.tag?.hot)).toEqual([]);
     world.dispose();
+  });
+
+  it('pays a coin that leaves the front at a corner and then drifts past the side', async () => {
+    const world = await PhysicsWorld.create(new Rng(2));
+    world.drop(0, { hot: true });
+    const coin = world.coins.at(-1)!;
+    coin.body.setTranslation({ x: TRAY.halfWidth - 1, y: 1, z: TRAY.front + 0.5 }, true);
+    coin.body.setLinvel({ x: 60, y: 0, z: 10 }, true);
+    const events = run(world, 2).filter((e) => e.type !== 'landed');
+    expect(events).toContainEqual(expect.objectContaining({ type: 'frontExit', tag: { hot: true } }));
+    world.dispose();
+  });
+
+  it('orders two crossings in one step by which edge comes first', () => {
+    const hw = TRAY.halfWidth;
+    expect(firstEdge({ x: hw - 0.1, z: TRAY.front - 2 }, { x: hw + 2, z: TRAY.front + 0.1 })).toBe('side');
+    expect(firstEdge({ x: hw - 2, z: TRAY.front - 0.1 }, { x: hw + 0.1, z: TRAY.front + 2 })).toBe('front');
+    expect(firstEdge({ x: 0, z: 0 }, { x: 1, z: 1 })).toBeNull();
+    expect(firstEdge({ x: hw + 1, z: 0 }, { x: hw + 2, z: TRAY.front + 1 })).toBe('side');
+    expect(firstEdge({ x: 0, z: TRAY.front + 1 }, { x: hw + 1, z: TRAY.front + 2 })).toBe('front');
   });
 
   it('refuses drops at the body cap', async () => {
