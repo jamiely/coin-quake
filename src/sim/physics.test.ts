@@ -40,6 +40,18 @@ describe('PhysicsWorld', () => {
     world.dispose();
   });
 
+  it('counts a coin that falls off a side as lost, even when it is moving forward', async () => {
+    const world = await PhysicsWorld.create(new Rng(2));
+    world.drop(0, { hot: true });
+    const coin = world.coins.at(-1)!;
+    coin.body.setTranslation({ x: TRAY.halfWidth + 2, y: 0.35, z: TRAY.front - 8 }, true);
+    coin.body.setLinvel({ x: 0, y: 0, z: 60 }, true);
+    const events = run(world, 1.5).filter((e) => e.type !== 'landed');
+    expect(events).toContainEqual(expect.objectContaining({ type: 'sideExit' }));
+    expect(events.filter((e) => e.type === 'frontExit' && e.tag?.hot)).toEqual([]);
+    world.dispose();
+  });
+
   it('refuses drops at the body cap', async () => {
     const world = await PhysicsWorld.create(new Rng(1));
     while (world.coins.length < MAX_COINS) world.drop(0, null);

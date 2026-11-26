@@ -7,6 +7,8 @@ export interface Coin {
   body: RAPIER.RigidBody;
   /** The drop's tag; null for coins from the starting pile. */
   tag: CoinTag | null;
+  /** Which edge the coin went over, fixed the moment it drops below the tray top. */
+  edge: 'front' | 'side' | null;
 }
 
 export type SimEvent =
@@ -92,8 +94,10 @@ export class PhysicsWorld {
         const v = coin.body.linvel();
         events.push({ type: 'landed', x: p.x, z: p.z, speed: Math.hypot(v.x, v.y, v.z) });
       }
+      // Decide the edge as the coin drops past the tray top, before the fall can carry it under the other edge.
+      if (coin.edge === null && p.y < 0) coin.edge = Math.abs(p.x) > TRAY.halfWidth ? 'side' : p.z > TRAY.front ? 'front' : null;
       if (p.y >= EXIT_Y) continue;
-      events.push(p.z > TRAY.front ? { type: 'frontExit', tag: coin.tag, x: p.x } : { type: 'sideExit', x: p.x });
+      events.push(coin.edge === 'front' ? { type: 'frontExit', tag: coin.tag, x: p.x } : { type: 'sideExit', x: p.x });
       this.falling.delete(coin.body);
       this.world.removeRigidBody(coin.body);
       this.coins[i] = this.coins[this.coins.length - 1]!;
@@ -105,7 +109,7 @@ export class PhysicsWorld {
   private addCoin(x: number, y: number, z: number, tag: CoinTag | null): RAPIER.RigidBody {
     const body = this.world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(x, y, z).setLinearDamping(0.3).setAngularDamping(0.8));
     this.world.createCollider(this.coinShape.setDensity(COIN.density).setFriction(COIN.friction).setRestitution(COIN.restitution), body);
-    this.coins.push({ body, tag });
+    this.coins.push({ body, tag, edge: null });
     return body;
   }
 
