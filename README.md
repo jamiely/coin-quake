@@ -7,7 +7,7 @@ decisions and roadmap are in [GAME_DESIGN.md](GAME_DESIGN.md).
 
 - **The machine:**
   - A swinging dropper carriage with a laser guide line, three gates (L/C/R), and a HOT tag that moves every
-    20–30 s and doubles the points of coins dropped through it.
+    20–30 s: coins dropped through it score ×5 and refill the stock double, so aiming beats holding.
   - The Works over the drop zone: gear, peg field, BONUS slot, pipe loop, flippers and Tesla coils.
   - Rapier coin physics on four pusher tiers, capped at 350 live coins.
   - A random starting structure (ring tower, pyramid, columns, wall) in cobalt coins, revealed and named at the

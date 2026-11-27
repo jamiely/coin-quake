@@ -207,7 +207,9 @@ export const RUN = {
 
 export const RULES = {
   pointsPerCoin: 10,
-  hotMultiplier: 2,
+  hotMultiplier: 5,
+  /** HOT coins refill the stock this many times over (see RUN.refillRate). */
+  hotRefill: 2,
   hotMinHold: 20,
   hotMaxHold: 30,
   /** Coins already on the machine when it boots. */

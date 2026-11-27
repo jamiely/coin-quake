@@ -5,8 +5,8 @@ import type { Rng } from '../rng';
 export function refillFor(kind: CoinKind, figurine?: string, hot = false): number {
   if (figurine) return 5;
   const base = kind === 'rainbow' ? 3 : kind === 'jumbo' || kind === 'gold' ? 2 : 1;
-  // A coin you dropped through the HOT gate refills double: aiming is how a run lasts.
-  return hot ? base * 2 : base;
+  // A coin you dropped through the HOT gate refills RULES.hotRefill times over: aiming is how a run lasts.
+  return hot ? base * RULES.hotRefill : base;
 }
 
 /** What a coin carries from the gate it fell through to the edge it falls off. */

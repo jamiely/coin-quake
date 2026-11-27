@@ -33,7 +33,7 @@ describe('Economy', () => {
     expect(refillFor('jumbo')).toBe(2);
     expect(refillFor('rainbow')).toBe(3);
     expect(refillFor('standard', 'duck')).toBe(5);
-    expect(refillFor('standard', undefined, true)).toBe(2);
+    expect(refillFor('standard', undefined, true)).toBe(RULES.hotRefill);
   });
 
   it('moves the HOT tag to a different gate every 20 to 30 seconds', () => {

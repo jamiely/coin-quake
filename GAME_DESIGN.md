@@ -107,7 +107,7 @@ From top to bottom the cabinet has four zones (see the layout in §6). Each cont
 | Contraption | Behavior | Payoff |
 |---|---|---|
 | **Dropper carriage** | Pendulum crane with a laser line; claw opens on drop with a puff of steam | — |
-| **Entry gates L/C/R** | Light up when the carriage passes; one is tagged **HOT** (×2) and the tag moves | Routes the coin; HOT doubles that coin's points |
+| **Entry gates L/C/R** | Light up when the carriage passes; one is tagged **HOT** (×5 since round 4) and the tag moves | Routes the coin; HOT multiplies that coin's points and doubles its refill |
 | **Coin Press** | Each coin passes under a stamping press that slams down (shake +1, sparks) | Every 10th coin is stamped **GOLD** (worth 5) |
 
 ### 3.2 Zone B: the Works (next 30%), the playfield above the pusher

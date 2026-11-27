@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { DECK, DROPPER, GATES, LOWER, PUSHER, STEPS, TRAY } from '../config';
+import { DECK, DROPPER, GATES, LOWER, PUSHER, RULES, STEPS, TRAY } from '../config';
 import { backWall, chunkyText, roundRect, signCanvas } from './textures';
 import { INK, PALETTE, outlined, toon } from './toon';
 
@@ -170,7 +170,7 @@ export function buildMachine(scene: THREE.Scene): Machine {
     hotSign.ctx.lineWidth = 8;
     hotSign.ctx.strokeStyle = INK;
     hotSign.ctx.stroke();
-    chunkyText(hotSign.ctx, 'HOT x2', 96, 50, 46, '#fff36b');
+    chunkyText(hotSign.ctx, `HOT x${RULES.hotMultiplier}`, 96, 50, 46, '#fff36b');
     const hot = new THREE.Mesh(new THREE.PlaneGeometry(6.4, 3.2), new THREE.MeshBasicMaterial({ map: hotSign.texture, transparent: true }));
     hot.position.set(x, DROPPER.y - 1.2, DROPPER.z + 4.5);
     hot.visible = false;

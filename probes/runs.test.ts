@@ -3,7 +3,7 @@
 // streams while the dropper is over the HOT gate and drops one coin a second elsewhere (skilled play).
 // Run: npx vitest run -c probes/vitest.config.ts runs      (SEEDS=1,2,3 BOT=holder|tapper to narrow)
 import { it } from 'vitest';
-import { COIN_KINDS, DROPPER, RUN, SIM } from '../src/config';
+import { COIN_KINDS, DROPPER, RULES, RUN, SIM } from '../src/config';
 import { Rng } from '../src/rng';
 import { dropperX, gateAt } from '../src/rules/dropper';
 import { Run } from '../src/rules/run';
@@ -55,7 +55,7 @@ it('runs probe', async () => {
         for (const e of world.step()) {
           if (e.type === 'frontExit') {
             const hot = Boolean(e.tag?.hot);
-            score += e.figurine ? 250 : 10 * COIN_KINDS[e.kind].value * (hot ? 2 : 1);
+            score += e.figurine ? 250 : RULES.pointsPerCoin * COIN_KINDS[e.kind].value * (hot ? RULES.hotMultiplier : 1);
             const n = refillFor(e.kind, e.figurine, hot);
             refills += n;
             run.coinsOut(n);

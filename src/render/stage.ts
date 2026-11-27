@@ -3,7 +3,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
-import { DROPPER, GATES, PUSHER, STEPS, type GateIndex } from '../config';
+import { DROPPER, GATES, PUSHER, RULES, STEPS, type GateIndex } from '../config';
 
 /** Seconds the opening shot of the structure lasts. */
 const REVEAL_TIME = 2.6;
@@ -184,7 +184,7 @@ export class Stage {
       if (this.digitBounce[i]! > 0.01) bouncing = true;
     }
     this.lastDigits = digits;
-    const label = `HOT: ${GATES[s.hotGate]} x2`;
+    const label = `HOT: ${GATES[s.hotGate]} x${RULES.hotMultiplier}`;
     const key = `${this.shownPoints}|${s.coins}|${label}`;
     if (key !== this.painted || bouncing) {
       this.painted = key;
