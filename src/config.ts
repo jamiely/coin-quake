@@ -196,6 +196,11 @@ export const RUN = {
    * about a minute and a half of Last Call instead of dropping hundreds of coins.
    */
   lastCallMaxStock: 120,
+  /**
+   * Share of a coin each front payout returns to the stock (HOT coins refill double). At 1 a blind hold never ran
+   * out and scored twice what careful tapping did.
+   */
+  refillRate: 0.45,
   /** Last Call ends in the final push after this long even with coins left (a held button paused by a celebration). */
   lastCallMaxSeconds: 75,
 };

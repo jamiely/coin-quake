@@ -1,16 +1,17 @@
 // Probe: full runs on the real physics with the real Run rules, played by bots, to tune RUN and the refill rules.
-// Bots: "holder" holds the button whenever it has coins (the jammer); "tapper" drops ~1.5 coins/s.
+// Bots: "holder" holds the button whenever it has coins (the jammer); "tapper" drops ~1.5 coins/s anywhere; "aimer"
+// streams while the dropper is over the HOT gate and drops one coin a second elsewhere (skilled play).
 // Run: npx vitest run -c probes/vitest.config.ts runs      (SEEDS=1,2,3 BOT=holder|tapper to narrow)
 import { it } from 'vitest';
 import { COIN_KINDS, DROPPER, RUN, SIM } from '../src/config';
 import { Rng } from '../src/rng';
-import { dropperX } from '../src/rules/dropper';
+import { dropperX, gateAt } from '../src/rules/dropper';
 import { Run } from '../src/rules/run';
-import { refillFor } from '../src/rules/economy';
+import { Economy, refillFor } from '../src/rules/economy';
 import { PhysicsWorld } from '../src/sim/physics';
 
 const seeds = (process.env.SEEDS ?? '1,2,3,4,5,6').split(',').map(Number);
-const bots = (process.env.BOT ?? 'holder,tapper').split(',');
+const bots = (process.env.BOT ?? 'holder,aimer').split(',');
 
 it('runs probe', async () => {
   const rows: string[] = [];
@@ -18,6 +19,7 @@ it('runs probe', async () => {
     for (const seed of seeds) {
       const world = await PhysicsWorld.create(new Rng(seed));
       const run = new Run();
+      const economy = new Economy(new Rng(seed + 100));
       run.start(0);
       let t = 0;
       let score = 0;
@@ -30,15 +32,19 @@ it('runs probe', async () => {
       while (run.phase !== 'over' && t < 600) {
         t += 1 / SIM.hz;
         run.deadlines(t);
+        economy.tick(t);
+        const gate = gateAt(dropperX(t));
+        const overHot = gate === economy.hotGate;
         if (t >= nextDrop && run.drop()) {
-          nextDrop = t + interval;
-          if (world.drop(dropperX(t), { hot: false })) drops++;
+          nextDrop = t + (bot === 'aimer' ? (overHot ? DROPPER.streamInterval : 1) : interval);
+          if (world.drop(dropperX(t), economy.tag(gate))) drops++;
           else run.refund();
         }
         for (const e of world.step()) {
           if (e.type === 'frontExit') {
-            score += e.figurine ? 250 : 10 * COIN_KINDS[e.kind].value;
-            const n = refillFor(e.kind, e.figurine);
+            const hot = Boolean(e.tag?.hot);
+            score += e.figurine ? 250 : 10 * COIN_KINDS[e.kind].value * (hot ? 2 : 1);
+            const n = refillFor(e.kind, e.figurine, hot);
             refills += n;
             run.coinsOut(n);
           } else if (e.type === 'bonus') {

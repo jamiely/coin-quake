@@ -9,7 +9,7 @@ function started(at = 0): Run {
 }
 
 describe('coin run', () => {
-  it('starts with the full stock; each drop spends one coin and each front-edge coin returns one, up to the cap', () => {
+  it('starts with the full stock; each drop spends one coin and front-edge coins refill it, up to the cap', () => {
     const run = new Run();
     expect(run.drop()).toBe(false); // not started
     expect(run.canStart).toBe(true);
@@ -17,7 +17,7 @@ describe('coin run', () => {
     expect(run.stock).toBe(RUN.startStock);
     expect(run.drop()).toBe(true);
     expect(run.stock).toBe(RUN.startStock - 1);
-    run.coinsOut();
+    run.coinsOut(Math.ceil(1 / RUN.refillRate));
     expect(run.stock).toBe(RUN.startStock);
     run.stock = RUN.stockCap;
     run.coinsOut();
@@ -48,6 +48,13 @@ describe('coin run', () => {
     }
     expect(run.phase).toBe('over');
     expect(t).toBeLessThan(RUN.lastCallSeconds);
+  });
+
+  it('a payout refills only part of a coin, carrying the fraction to the next one', () => {
+    const run = started();
+    run.stock = 10;
+    for (let i = 0; i < 20; i++) run.coinsOut();
+    expect(run.stock).toBe(10 + Math.floor(20 * RUN.refillRate));
   });
 
   it('Last Call caps a hoarded stock so the run finishes soon after', () => {

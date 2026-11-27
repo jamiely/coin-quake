@@ -61,15 +61,27 @@ export class Run {
     return true;
   }
 
+  private refillCarry = 0;
+
   /** A drop the machine could not take (the body cap): gives the coin back. */
   refund(): void {
     this.stock = Math.min(RUN.stockCap, this.stock + 1);
   }
 
-  /** Coins left the tray's front edge: each returns to the stock until Last Call. */
+  /**
+   * Coins left the tray's front edge: each returns RUN.refillRate of a coin to the stock until Last Call (fractions carry
+   * over), so blind holding drains the stock and aiming (HOT coins refill double) stretches the run.
+   */
   coinsOut(count = 1): void {
     if (this.phase !== 'playing' && this.phase !== 'suddenDeath') return;
-    this.stock = Math.min(RUN.stockCap, this.stock + count);
+    this.refillCarry += count * RUN.refillRate;
+    // The epsilon absorbs float drift (twenty 0.45s sum to 8.9999...).
+    let whole = Math.floor(this.refillCarry + 1e-9);
+    // Broke, any coin off the front is a lifeline: it always gives back at least one.
+    if (whole === 0 && this.phase === 'suddenDeath') whole = 1;
+    if (whole === 0) return;
+    this.refillCarry = Math.max(0, this.refillCarry - whole);
+    this.stock = Math.min(RUN.stockCap, this.stock + whole);
     if (this.phase === 'suddenDeath') {
       this.phase = 'playing';
       this.events.push('revive');

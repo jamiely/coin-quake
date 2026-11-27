@@ -283,7 +283,7 @@ export class Game {
         const hot = Boolean(e.tag?.hot);
         const fever = this.pressure.inFever;
         const won = this.economy.frontExit(e.tag, this.pressure.multiplier * COIN_KINDS[e.kind].value);
-        this.run.coinsOut(refillFor(e.kind));
+        this.run.coinsOut(refillFor(e.kind, undefined, hot));
         const events = this.pressure.payout(hot);
         this.fx.payout(e.x, won, this.pressure.combo, hot, fever, e.kind, e.tag !== null);
         for (const pe of events) this.fx.pressure(pe);

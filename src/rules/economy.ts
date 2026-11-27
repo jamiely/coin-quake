@@ -2,9 +2,11 @@ import { RULES, type CoinKind, type GateIndex } from '../config';
 import type { Rng } from '../rng';
 
 /** Coins returned to the run's stock for one thing pushed off the front: bigger prizes pay more back. */
-export function refillFor(kind: CoinKind, figurine?: string): number {
+export function refillFor(kind: CoinKind, figurine?: string, hot = false): number {
   if (figurine) return 5;
-  return kind === 'rainbow' ? 3 : kind === 'jumbo' || kind === 'gold' ? 2 : 1;
+  const base = kind === 'rainbow' ? 3 : kind === 'jumbo' || kind === 'gold' ? 2 : 1;
+  // A coin you dropped through the HOT gate refills double: aiming is how a run lasts.
+  return hot ? base * 2 : base;
 }
 
 /** What a coin carries from the gate it fell through to the edge it falls off. */
