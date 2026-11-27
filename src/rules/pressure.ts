@@ -35,6 +35,8 @@ export type PressureEvent =
 
 export class Pressure {
   value = 0;
+  /** Set when a run ends: nothing builds pressure or starts a fever until the next run's fresh Pressure. */
+  frozen = false;
   combo = 0;
   /** Seconds of fever left; > 0 while QUAKE fever runs. */
   fever = 0;
@@ -65,6 +67,7 @@ export class Pressure {
   /** A coin fell off the front: chains the combo and builds pressure. */
   payout(hot: boolean): PressureEvent[] {
     const events: PressureEvent[] = [];
+    if (this.frozen) return events;
     this.combo = this.now - this.lastPayAt <= PRESSURE.comboWindow ? this.combo + 1 : 1;
     this.lastPayAt = this.now;
     events.push({ type: 'combo', count: this.combo });
@@ -88,6 +91,7 @@ export class Pressure {
     const dt = Math.max(0, simTime - this.now);
     this.now = simTime;
     const events: PressureEvent[] = [];
+    if (this.frozen) return events;
     if (this.combo > 0 && this.now - this.lastPayAt > PRESSURE.comboWindow) {
       events.push({ type: 'comboEnd', count: this.combo });
       this.combo = 0;
@@ -105,7 +109,7 @@ export class Pressure {
 
   private gain(amount: number): PressureEvent[] {
     const events: PressureEvent[] = [];
-    if (this.inFever) return events;
+    if (this.inFever || this.frozen) return events;
     this.lastGainAt = this.now;
     this.setValue(this.value + amount, events);
     if (this.value >= 100) {

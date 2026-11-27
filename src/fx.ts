@@ -342,7 +342,7 @@ export class Fx {
   }
 
   /**
-   * The big jubilant moment (fever end): Ode to Joy fanfare with choir, firework volleys erupting from the bottom of
+   * The big jubilant moment (fever end): the Jackpot March, firework volleys erupting from the bottom of
    * the screen, a confetti storm, cheering, a giant stamp and a counting tally. Skippable after 1.5 s.
    */
   celebrate(): void {

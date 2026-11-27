@@ -15,7 +15,7 @@ export function peakOverlap(spans: readonly [number, number][], start: number, e
   return peak;
 }
 
-/** Voice cap; celebrations stack a fanfare, choir, fireworks and cheers, so it leaves headroom for those. */
+/** Voice cap; celebrations stack the jackpot march, fireworks and cheers, so it leaves headroom for those. */
 const MAX_VOICES = 48;
 
 export class Sound {
@@ -209,30 +209,117 @@ export class Sound {
   }
 
   /**
-   * Celebration fanfare: Beethoven's Ode to Joy (public domain) as a brass lead over a sustained "choir" (detuned
-   * saws through a vowel-ish band-pass), timpani on the downbeats and a cymbal swell. About 4.5 s.
+   * Coin Quake's own celebration theme, "The Jackpot March" (an original tune, written for this game): a brassy, clanky
+   * oompah march in Bb at ~150 bpm. A tuba pumps root-fifth on the beats, honky muted-brass chords stab the offbeats,
+   * a trumpet lead strutts a coin-counting melody, cash-register dings land on bar downbeats and a coin cascade
+   * shimmers across the bars, then a ragtime stop-time tag slams into a big final chord with a register "ka-ching".
+   * About 5 s, for the MEGA QUAKE tally and the GAME OVER finale.
    */
   fanfare(): void {
     if (!this.ctx || this.muted) return;
-    const beat = 0.27;
-    // E E F G | G F E D | C C D E | E. D D (in D major here: F# F# G A | A G F# E | D D E F# | F#. E E)
-    const ode: [number, number][] = [
-      [66, 1], [66, 1], [67, 1], [69, 1], [69, 1], [67, 1], [66, 1], [64, 1],
-      [62, 1], [62, 1], [64, 1], [66, 1], [66, 1.5], [64, 0.5], [64, 2],
-    ];
+    const beat = 0.4;
     const hz = (midi: number) => 440 * 2 ** ((midi - 69) / 12);
+    // Four bars of march (Bb, Eb, F7, Bb), then a two-bar ragtime tag.
+    const bars: { root: number; fifth: number; chord: number[] }[] = [
+      { root: 46, fifth: 53, chord: [62, 65, 70] },
+      { root: 51, fifth: 46, chord: [63, 67, 70] },
+      { root: 53, fifth: 48, chord: [63, 69, 72] },
+      { root: 46, fifth: 53, chord: [62, 65, 70] },
+    ];
+    // Melody, [midi, beats]: a strutting pickup figure that climbs like coins stacking, then tumbles back down.
+    const lead: [number, number][] = [
+      [70, 0.5], [72, 0.5], [74, 1], [77, 1], [74, 0.5], [77, 0.5],
+      [79, 1], [75, 0.5], [79, 0.5], [82, 1], [79, 1],
+      [81, 0.5], [79, 0.5], [77, 0.5], [75, 0.5], [74, 1], [72, 1],
+      [74, 0.5], [77, 0.5], [82, 1.5], [0, 0.5], [82, 1],
+    ];
+    bars.forEach((bar, b) => {
+      const t0 = b * 4 * beat;
+      for (let i = 0; i < 4; i++) {
+        // Oompah: tuba on 1 and 3 (root, then fifth), honky brass chord stabs on 2 and 4.
+        const t = t0 + i * beat;
+        if (i % 2 === 0) this.tuba(hz(i === 0 ? bar.root : bar.fifth), beat * 0.7, t);
+        else for (const n of bar.chord) this.honk(hz(n), beat * 0.32, t);
+      }
+      // A cash-register ding on each bar's downbeat, and a little coin cascade running up the bar.
+      this.ding(t0, 1 + b * 0.06);
+      this.cascade(t0 + beat * 1.5, 6 + b * 2, beat * 2);
+    });
     let t = 0;
-    for (const [n, len] of ode) {
-      this.brass(hz(n), beat * len * 0.95, t);
-      this.brass(hz(n - 12), beat * len * 0.95, t, 0.05);
+    for (const [n, len] of lead) {
+      if (n) this.brass(hz(n), beat * len * 0.9, t, 0.08);
       t += beat * len;
     }
-    // Choir pads: I – IV – V – I under the tune.
-    const chords = [[62, 66, 69], [62, 67, 71], [61, 64, 69], [62, 66, 69]];
-    chords.forEach((chord, i) => chord.forEach((n) => this.choir(hz(n), beat * 4.2, i * beat * 4)));
-    for (let i = 0; i < 4; i++) this.tone(65, 0.5, 0.45, 'sine', 40, i * beat * 4);
-    this.noiseHit(3.4, 7000, 0.08, 'highpass', 0.6);
-    this.noiseHit(1.6, 5000, 0.16, 'highpass', t - 0.2);
+    // Ragtime stop-time tag: hits on 1 and the "and" of 2, a chromatic tuba walk-up, then the big chord.
+    const tag = 4 * 4 * beat;
+    for (const [off, gain] of [[0, 0.11], [beat * 1.5, 0.11]] as const) {
+      for (const n of [58, 62, 65, 70]) this.honk(hz(n), beat * 0.4, tag + off, gain);
+      this.tuba(hz(46), beat * 0.4, tag + off);
+    }
+    [41, 42, 43, 44, 45].forEach((n, i) => this.tuba(hz(n), beat * 0.28, tag + beat * 2.2 + i * beat * 0.3));
+    const end = tag + beat * 4;
+    for (const n of [58, 62, 65, 70, 74, 77]) this.brass(hz(n), beat * 3, end, 0.07);
+    this.tuba(hz(34), beat * 3, end);
+    this.cascade(end, 18, beat * 2.5);
+    this.ding(end + beat * 0.1, 1.5);
+    this.noiseHit(2.2, 6500, 0.1, 'highpass', end);
+    this.tone(55, 0.6, 0.45, 'sine', 35, end);
+  }
+
+  /** Oompah tuba: a round low saw through a low-pass, with a soft lip "bop" attack. */
+  private tuba(freq: number, dur: number, delay: number): void {
+    const o = this.out(delay, dur);
+    if (!o) return;
+    const t = o.ctx.currentTime + delay;
+    const osc = o.ctx.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(freq * 0.97, t);
+    osc.frequency.exponentialRampToValueAtTime(freq, t + 0.04);
+    const filter = o.ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = freq * 4;
+    const env = o.ctx.createGain();
+    env.gain.setValueAtTime(0.0001, t);
+    env.gain.exponentialRampToValueAtTime(0.22, t + 0.02);
+    env.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(filter).connect(env).connect(o.master);
+    this.track(osc, t, dur);
+  }
+
+  /** A honky muted-brass stab: a square wave through a nasal band-pass, short and punchy. */
+  private honk(freq: number, dur: number, delay: number, gain = 0.06): void {
+    const o = this.out(delay, dur);
+    if (!o) return;
+    const t = o.ctx.currentTime + delay;
+    const osc = o.ctx.createOscillator();
+    osc.type = 'square';
+    osc.frequency.value = freq;
+    const nose = o.ctx.createBiquadFilter();
+    nose.type = 'bandpass';
+    nose.frequency.value = Math.min(4000, freq * 2.5);
+    nose.Q.value = 2.5;
+    const env = o.ctx.createGain();
+    env.gain.setValueAtTime(0.0001, t);
+    env.gain.exponentialRampToValueAtTime(gain, t + 0.008);
+    env.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(nose).connect(env).connect(o.master);
+    this.track(osc, t, dur);
+  }
+
+  /** A cash-register ding: a bright bell pair plus the drawer's clack. */
+  private ding(delay: number, pitch = 1): void {
+    this.tone(2093 * pitch, 0.5, 0.09, 'sine', undefined, delay);
+    this.tone(3136 * pitch, 0.35, 0.05, 'sine', undefined, delay);
+    this.noiseHit(0.04, 2200, 0.12, 'bandpass', delay);
+  }
+
+  /** A coin cascade: `count` bright clinks tumbling quickly across `span` seconds, rising in pitch. */
+  private cascade(delay: number, count: number, span: number): void {
+    for (let i = 0; i < count; i++) {
+      const f = (2400 + (i / count) * 1600) * (0.95 + Math.random() * 0.1);
+      const at = delay + (i / count) * span + Math.random() * 0.02;
+      this.tone(f, 0.07, 0.05, 'triangle', undefined, at);
+    }
   }
 
   /** One firework: a rising whistle, then a boom and crackle. */
@@ -271,28 +358,6 @@ export class Sound {
     this.track(osc, t, dur);
   }
 
-  private choir(freq: number, dur: number, delay: number): void {
-    for (const detune of [-9, 7]) {
-      const o = this.out(delay, dur);
-      if (!o) return;
-      const t = o.ctx.currentTime + delay;
-      const osc = o.ctx.createOscillator();
-      osc.type = 'sawtooth';
-      osc.frequency.value = freq;
-      osc.detune.value = detune;
-      const vowel = o.ctx.createBiquadFilter();
-      vowel.type = 'bandpass';
-      vowel.frequency.value = 800;
-      vowel.Q.value = 3;
-      const env = o.ctx.createGain();
-      env.gain.setValueAtTime(0.0001, t);
-      env.gain.linearRampToValueAtTime(0.045, t + 0.35);
-      env.gain.setValueAtTime(0.045, t + dur - 0.4);
-      env.gain.linearRampToValueAtTime(0.0001, t + dur);
-      osc.connect(vowel).connect(env).connect(o.master);
-      this.track(osc, t, dur);
-    }
-  }
 
   credit(): void {
     [0, 7, 12, 16].forEach((s, i) => this.tone(880 * 2 ** (s / 12), 0.1, 0.13, 'square', undefined, i * 0.05));

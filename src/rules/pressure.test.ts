@@ -45,6 +45,17 @@ describe('Pressure', () => {
     expect(p.value).toBeLessThan(before);
   });
 
+  it('frozen pressure builds nothing and never starts a fever', () => {
+    const p = new Pressure();
+    p.frozen = true;
+    expect(p.quake()).toEqual([]);
+    expect(p.payout(true)).toEqual([]);
+    expect(p.machine(50)).toEqual([]);
+    expect(p.tick(10)).toEqual([]);
+    expect(p.value).toBe(0);
+    expect(p.inFever).toBe(false);
+  });
+
   it('QUAKEs at 100, runs a x3 fever that ignores gains, burns down, and ends calm', () => {
     const p = new Pressure();
     p.tick(1);

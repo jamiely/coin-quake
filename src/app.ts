@@ -239,9 +239,9 @@ export class Game {
     this.simTime += 1 / SIM.hz;
     this.economy.tick(this.simTime);
     this.run.deadlines(this.simTime);
-    // Once the run is over its finale and result screens own the display: pressure is frozen (no fever end, no QUAKE)
-    // until the next run.
-    if (this.run.phase !== 'over') for (const e of this.pressure.tick(this.simTime)) this.fx.pressure(e);
+    // Once the run is over its finale and result screens own the display: pressure is frozen (finishRun) so no fever or
+    // QUAKE can start until the next run.
+    for (const e of this.pressure.tick(this.simTime)) this.fx.pressure(e);
     if (this.fx.celebration.active) {
       // A hold that started before the celebration stops dispensing; the player presses again afterwards.
       if (this.trigger.held) this.swallowed = true;
@@ -347,8 +347,10 @@ export class Game {
     this.trigger.cancel();
     // The button that was held for the last drops must be released before it enters initials or plays again.
     this.swallowed = true;
-    // A fever still running ends quietly; its tally would otherwise replace the result.
+    // A fever still running ends quietly (its tally would otherwise replace the result), and nothing builds pressure
+    // again until the next run.
     this.pressure = new Pressure();
+    this.pressure.frozen = true;
     this.fx.finale(this.run.finalScore);
     this.pendingEnd = true;
   }

@@ -123,7 +123,10 @@ export class Hud {
       this.letters.forEach((l, i) => {
         l.textContent = e.text[i]!;
         l.className = i < e.index ? 'locked' : i === e.index ? 'current' : '';
+        // Every letter (and a new entry) starts with an empty hold fill.
+        l.style.setProperty('--hold', '0');
       });
+      this.entryHold = '0.00';
     }
     const progress = e.progress(s.now).toFixed(2);
     const current = this.letters[e.index];
