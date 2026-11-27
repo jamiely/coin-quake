@@ -63,4 +63,4 @@ it('runs probe', async () => {
     }
   }
   console.log(`RUN start ${RUN.startStock} lastCall ${RUN.lastCallSeconds}s bonus ${RUN.bonusCoins} stream ${DROPPER.streamInterval}s\n` + rows.join('\n'));
-}, 3_600_000);
+}, 10_800_000);

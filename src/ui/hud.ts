@@ -35,6 +35,10 @@ export class Hud {
   private toastUntil = 0;
   private toastClock = 0;
   private painted = '';
+  private readonly letters: HTMLSpanElement[] = [];
+  private entryTitle: HTMLDivElement | null = null;
+  private entryKey = '';
+  private entryHold = '';
   private tablePainted = '';
 
   constructor(parent: HTMLElement) {
@@ -88,28 +92,45 @@ export class Hud {
     this.paintTable(s);
   }
 
+  /** Initials: nodes built once; per frame only changed letters and the hold-progress fill are touched. */
   private paintEntry(s: HudState): void {
     const e = s.initials;
     this.entry.classList.toggle('on', e !== null);
-    if (!e) return;
-    const progress = e.progress(s.now);
-    this.entry.replaceChildren();
-    const title = document.createElement('div');
-    title.className = 'hud-entry-title';
-    title.replaceChildren('NEW HIGH SCORE', document.createElement('br'), s.finalScore.toLocaleString('en-US'));
-    const letters = document.createElement('div');
-    letters.className = 'hud-letters';
-    e.text.split('').forEach((ch, i) => {
-      const l = document.createElement('span');
-      l.textContent = ch;
-      l.className = i < e.index ? 'locked' : i === e.index ? 'current' : '';
-      if (i === e.index) l.style.setProperty('--hold', String(progress));
-      letters.append(l);
-    });
-    const help = document.createElement('div');
-    help.className = 'hud-entry-help';
-    help.textContent = 'TAP: NEXT LETTER  •  HOLD: LOCK IT';
-    this.entry.append(title, letters, help);
+    if (!e) {
+      this.entryKey = '';
+      return;
+    }
+    if (!this.letters.length) {
+      const title = document.createElement('div');
+      title.className = 'hud-entry-title';
+      const row = document.createElement('div');
+      row.className = 'hud-letters';
+      for (let i = 0; i < 3; i++) {
+        const l = document.createElement('span');
+        row.append(l);
+        this.letters.push(l);
+      }
+      const help = document.createElement('div');
+      help.className = 'hud-entry-help';
+      help.textContent = 'TAP: NEXT LETTER  •  HOLD: LOCK IT';
+      this.entryTitle = title;
+      this.entry.append(title, row, help);
+    }
+    const key = `${e.text}|${e.index}|${s.finalScore}`;
+    if (key !== this.entryKey) {
+      this.entryKey = key;
+      this.entryTitle!.replaceChildren('NEW HIGH SCORE', document.createElement('br'), s.finalScore.toLocaleString('en-US'));
+      this.letters.forEach((l, i) => {
+        l.textContent = e.text[i]!;
+        l.className = i < e.index ? 'locked' : i === e.index ? 'current' : '';
+      });
+    }
+    const progress = e.progress(s.now).toFixed(2);
+    const current = this.letters[e.index];
+    if (current && progress !== this.entryHold) {
+      this.entryHold = progress;
+      current.style.setProperty('--hold', progress);
+    }
   }
 
   private paintTable(s: HudState): void {

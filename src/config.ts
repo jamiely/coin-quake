@@ -183,6 +183,8 @@ export const RUN = {
    * about a minute and a half of Last Call instead of dropping hundreds of coins.
    */
   lastCallMaxStock: 120,
+  /** Last Call ends in the final push after this long even with coins left (a held button paused by a celebration). */
+  lastCallMaxSeconds: 75,
 };
 
 export const RULES = {

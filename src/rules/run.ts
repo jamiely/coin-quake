@@ -106,6 +106,9 @@ export class Run {
       this.enter(this.phase === 'suddenDeath' ? 'sweep' : 'lastCall');
     } else if (this.phase === 'suddenDeath' && now - this.since >= RUN.suddenDeathSeconds) {
       this.enter('sweep');
+    } else if (this.phase === 'lastCall' && now - this.since >= RUN.lastCallMaxSeconds) {
+      // Bounded: coins left unspent don't keep the run going forever.
+      this.enter('sweep');
     }
   }
 

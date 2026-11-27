@@ -202,6 +202,22 @@ export class CoinsView {
     scene.add(this.figurineGroup);
   }
 
+  /**
+   * Forgets every per-body cache before a new physics world is shown. Rapier handles repeat across worlds, so a stale
+   * figurine or squash entry would otherwise attach to an unrelated coin of the new machine.
+   */
+  reset(): void {
+    for (const [, g] of this.figurines) {
+      g.visible = false;
+      const kind = g.userData.kind as string;
+      let pool = this.figurinePool.get(kind);
+      if (!pool) this.figurinePool.set(kind, (pool = []));
+      pool.push(g);
+    }
+    this.figurines.clear();
+    for (const map of [this.squash, this.squashAge, this.cheerAge, this.dizzyAge]) map.clear();
+  }
+
   update(physics: PhysicsWorld, dt: number, t: number): void {
     for (const [handle, k] of physics.blasted) {
       this.squash.set(handle, Math.max(this.squash.get(handle) ?? 0, k));

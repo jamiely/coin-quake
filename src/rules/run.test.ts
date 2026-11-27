@@ -61,6 +61,16 @@ describe('coin run', () => {
     expect(small.stock).toBe(3);
   });
 
+  it('Last Call ends in the final push after its limit even with coins left (a held button that stopped dropping)', () => {
+    const run = started();
+    run.callLast();
+    expect(run.stock).toBeGreaterThan(0);
+    run.tick(RUN.lastCallMaxSeconds - 1, 0, true, 0);
+    expect(run.phase).toBe('lastCall');
+    run.tick(RUN.lastCallMaxSeconds, 0, true, 0);
+    expect(run.phase).toBe('sweep');
+  });
+
   it('warns once when the stock falls to the low mark', () => {
     const run = started();
     run.stock = RUN.lowStock + 1;

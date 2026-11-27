@@ -243,6 +243,11 @@ export class Stage {
    * The starting structure's reveal: the camera opens close on the build and pulls back out to the whole machine, while
    * a spotlight ring pulses around it. Call after a fresh machine is built.
    */
+  /** A new physics world is about to be shown: drop the renderer's per-body state from the old one. */
+  newWorld(): void {
+    this.coins.reset();
+  }
+
   reveal(physics: PhysicsWorld): void {
     let n = 0;
     const c = new THREE.Vector3();

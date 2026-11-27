@@ -59,6 +59,7 @@ export class Game {
   private perfEl: HTMLElement | null = null;
   private readonly unlisten: (() => void)[] = [];
   private rebuilding = false;
+  private heldDuringRebuild = false;
   /** How many runs this machine has started (the first one starts on the booted machine). */
   runs = 0;
 
@@ -124,7 +125,11 @@ export class Game {
       this.swallowed = true;
       return;
     }
-    if (this.rebuilding) return;
+    if (this.rebuilding) {
+      // Still held when the new machine is ready, this press starts dropping.
+      this.heldDuringRebuild = true;
+      return;
+    }
     // Initials take every fresh press, even one right after the finale (the swallow only guards dropping).
     if (this.initials) {
       this.swallowed = false;
@@ -141,6 +146,7 @@ export class Game {
   }
 
   release(): void {
+    this.heldDuringRebuild = false;
     this.swallowed = false;
     this.initials?.up(this.simTime);
     this.trigger.release();
@@ -186,7 +192,14 @@ export class Game {
    */
   async startRun(): Promise<void> {
     this.showingTable = false;
-    if (this.runs > 0) await this.newMachine();
+    if (this.runs > 0) {
+      // The play-again press survives the rebuild: if it's still held when the machine is ready (no release since),
+      // it drops at once. startRun is called from press(), so the button is down now.
+      this.heldDuringRebuild = true;
+      await this.newMachine();
+      if (this.heldDuringRebuild) this.trigger.press(this.simTime);
+      this.heldDuringRebuild = false;
+    }
     this.runs++;
     this.run.start(this.simTime);
     this.fx.runStart();
@@ -206,6 +219,8 @@ export class Game {
     this.pendingEnd = false;
     this.trigger.cancel();
     this.fx.reset();
+    // Rapier handles repeat across worlds: the renderer forgets every per-body cache of the old machine.
+    this.stage.newWorld();
     this.stage.reveal(this.physics);
     this.rebuilding = false;
   }
@@ -224,7 +239,9 @@ export class Game {
     this.simTime += 1 / SIM.hz;
     this.economy.tick(this.simTime);
     this.run.deadlines(this.simTime);
-    for (const e of this.pressure.tick(this.simTime)) this.fx.pressure(e);
+    // Once the run is over its finale and result screens own the display: pressure is frozen (no fever end, no QUAKE)
+    // until the next run.
+    if (this.run.phase !== 'over') for (const e of this.pressure.tick(this.simTime)) this.fx.pressure(e);
     if (this.fx.celebration.active) {
       // A hold that started before the celebration stops dispensing; the player presses again afterwards.
       if (this.trigger.held) this.swallowed = true;
@@ -330,6 +347,8 @@ export class Game {
     this.trigger.cancel();
     // The button that was held for the last drops must be released before it enters initials or plays again.
     this.swallowed = true;
+    // A fever still running ends quietly; its tally would otherwise replace the result.
+    this.pressure = new Pressure();
     this.fx.finale(this.run.finalScore);
     this.pendingEnd = true;
   }
