@@ -15,27 +15,27 @@ export const RECIPES: Record<string, Partial<Record<Weight, Recipe>>> = {
     1: { trauma: 0.08, kick: 0.3 },
     2: { trauma: 0.14, kick: 0.5, flash: { color: '#ffe27a', opacity: 0.08, fade: 0.15 } },
   },
-  loss: { 1: { trauma: 0.06 } },
-  peg: { 1: { trauma: 0.03 } },
-  gear: { 1: { trauma: 0.08 } },
-  loop: { 1: { trauma: 0.12, kick: 0.4 } },
-  flipper: { 1: { trauma: 0.1, kick: 0.35 } },
-  zap: { 1: { trauma: 0.1, kick: 0.3, flash: { color: '#bff4ff', opacity: 0.12, fade: 0.12 } } },
+  loss: { 1: {} },
+  peg: { 1: {} },
+  gear: { 1: {} },
+  loop: { 1: {} },
+  flipper: { 1: {} },
+  zap: { 1: { flash: { color: '#bff4ff', opacity: 0.12, fade: 0.12 } } },
   bonus: { 2: { trauma: 0.4, hitStop: 0.08, punch: -3, flash: { color: '#fff1a8', opacity: 0.35, fade: 0.3 } } },
   milestone: {
     1: { trauma: 0.35, hitStop: 0.06, punch: -2.5, flash: { color: '#ffffff', opacity: 0.35, fade: 0.25 } },
     3: { trauma: 0.5, hitStop: 0.09, punch: -3.5, flash: { color: '#ffffff', opacity: 0.5, fade: 0.3 }, slowMo: { scale: 0.4, hold: 0.25 } },
     5: { trauma: 0.7, hitStop: 0.12, punch: -5, flash: { color: '#fff1a8', opacity: 0.7, fade: 0.4 }, slowMo: { scale: 0.3, hold: 0.4 } },
   },
-  tierUp: { 1: { trauma: 0.3, flash: { color: '#ff7a3d', opacity: 0.2, fade: 0.35 } } },
+  tierUp: { 1: { flash: { color: '#ff7a3d', opacity: 0.2, fade: 0.35 } } },
   quake: {
     5: { trauma: 1, hitStop: 0.15, punch: -6, flash: { color: '#ffffff', opacity: 0.95, fade: 0.6 }, slowMo: { scale: 0.25, hold: 0.6 } },
   },
   celebrate: { 5: { trauma: 0.8, hitStop: 0.12, punch: -5, flash: { color: '#fff1a8', opacity: 0.8, fade: 0.7 }, slowMo: { scale: 0.35, hold: 0.8 } } },
-  firework: { 1: { trauma: 0.12, flash: { color: '#ffffff', opacity: 0.06, fade: 0.2 } } },
-  credit: { 1: { trauma: 0.15, flash: { color: '#ffd84a', opacity: 0.2, fade: 0.3 } } },
+  firework: { 1: { flash: { color: '#ffffff', opacity: 0.06, fade: 0.2 } } },
+  credit: { 1: { flash: { color: '#ffd84a', opacity: 0.2, fade: 0.3 } } },
   prize: { 3: { trauma: 0.6, hitStop: 0.12, punch: -4, flash: { color: '#fff1a8', opacity: 0.55, fade: 0.4 }, slowMo: { scale: 0.4, hold: 0.35 } } },
-  dumpWarning: { 1: { trauma: 0.2, flash: { color: '#ff3d2e', opacity: 0.15, fade: 0.3 } } },
+  dumpWarning: { 1: { flash: { color: '#ff3d2e', opacity: 0.15, fade: 0.3 } } },
   dump: { 4: { trauma: 0.85, hitStop: 0.08, punch: -4, kick: 1.2, flash: { color: '#fff1d6', opacity: 0.4, fade: 0.35 } } },
 };
 
@@ -43,8 +43,8 @@ const RAINBOW = ['#ff4d6d', '#ffa53d', '#ffe14a', '#5fe07a', '#4dc3ff', '#a77bff
 const KIND_LABEL: Partial<Record<CoinKind, string>> = { jumbo: 'JUMBO!', lead: 'HEAVY!', gold: 'GOLD!', rainbow: 'RAINBOW!!' };
 const FIGURINE_NAMES: Record<string, string> = { critter: 'GEAR CRITTER', professor: 'MINI PROFESSOR', bolt: 'BOLT TOY', duck: 'BRASS DUCK' };
 
-/** Constant micro-shake per pressure tier (Hot and Critical rattle), and much more during fever. */
-const RUMBLE: Record<Tier, number> = { 0: 0, 1: 0, 2: 0.12, 3: 0.2 };
+/** Pressure alone never moves the camera. */
+const RUMBLE: Record<Tier, number> = { 0: 0, 1: 0, 2: 0, 3: 0 };
 const TIER_COLORS: Record<Tier, string> = { 0: PALETTE.sky, 1: PALETTE.gold, 2: '#ff3fa4', 3: '#ff3d2e' };
 
 /** Routes game events to every juice channel and to sound. One place to tune how the game feels. */
@@ -57,8 +57,6 @@ export class Fx {
   /** Points won during the current fever, for the tally. */
   feverPoints = 0;
   private volleys: { at: number; side: number }[] = [];
-  /** Seconds of dump-warning rumble left. */
-  private dumpRumble = 0;
   private pendingWon = 0;
   private lastEmpty = -1;
   private pendingX = 0;
@@ -106,11 +104,11 @@ export class Fx {
     if (weight === 3) this.popups.show(this.rand() < 0.5 ? 'CLANK!' : 'BONK!', { x, y: y + 4, z }, { fill: '#fff1d6', ink: '#2b1533', size: 2.2, life: 0.55, rise: 8, tilt: 0.7 });
   }
 
-  payout(x: number, won: number, combo: number, hot: boolean, fever: boolean, kind: CoinKind = 'standard'): void {
+  payout(x: number, won: number, combo: number, hot: boolean, fever: boolean, kind: CoinKind = 'standard', playerCaused = true): void {
     if (fever) this.feverPoints += won;
     const bonus = COIN_KINDS[kind].value >= 5;
     const big = hot || fever || combo >= 5 || bonus;
-    this.juice.fire('payout', big ? 2 : 1, { x: x / TRAY.halfWidth, y: -1 });
+    if (playerCaused) this.juice.fire('payout', big ? 2 : 1, { x: x / TRAY.halfWidth, y: -1 });
     this.sound.payout(combo, hot, COIN_KINDS[kind].pitch, bonus);
     const at = this.v.set(x, -1, TRAY.front + 2);
     // A gold fountain spraying up out of the chute, bigger with the combo; rainbow coins spray every colour.
@@ -202,12 +200,11 @@ export class Fx {
     this.overlay.titleCard('PRIZE!', PALETTE.gold, `${FIGURINE_NAMES[figurine] ?? 'FIGURINE'} +${won}`, 1.3, 3);
   }
 
-  /** A coin dump is coming: siren, flashing warning, rumble. */
+  /** A coin dump is coming: siren and flashing warning, but no camera shake. */
   dumpWarning(seconds: number): void {
     this.sound.siren(seconds);
     this.juice.fire('dumpWarning');
     this.overlay.titleCard('COIN DUMP!', '#ffd84a', 'INCOMING', seconds, 2);
-    this.dumpRumble = seconds;
   }
 
   /** The dump lands: a huge crash, shake, a dust cloud across the tray, and a counted popup. */
@@ -238,7 +235,6 @@ export class Fx {
     this.feverPoints = 0;
     this.volleys = [];
     this.pendingWon = 0;
-    this.dumpRumble = 0;
   }
 
   /** The player pressed with an empty stock: a dry click. */
@@ -338,7 +334,7 @@ export class Fx {
 
   /** Sets the pressure-driven rumble; fever shakes hard all the time. */
   setRumble(tier: Tier, fever: boolean): void {
-    this.juice.rumble = Math.max(fever ? 0.32 : RUMBLE[tier], this.dumpRumble > 0 ? 0.28 : 0);
+    this.juice.rumble = fever ? 0.32 : RUMBLE[tier];
   }
 
   /**
@@ -370,7 +366,6 @@ export class Fx {
 
   update(realDt: number, camera: THREE.Camera): void {
     this.clock += realDt;
-    this.dumpRumble = Math.max(0, this.dumpRumble - realDt);
     // Show the rest of a merged burst once its window closes, so the last coins of a chain are never silent.
     if (this.pendingWon > 0 && this.clock - this.lastPayPopup >= 0.15) {
       this.popups.show(`+${this.pendingWon}`, { x: this.pendingX, y: 2, z: TRAY.front + 3 }, { fill: PALETTE.gold, ink: '#2b1533', size: 2.4, rise: 9 });
