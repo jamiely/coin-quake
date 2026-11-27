@@ -29,14 +29,26 @@ it('runs probe', async () => {
       let brokeAt = -1;
       const interval = bot === 'holder' ? DROPPER.streamInterval : 0.66;
       let nextDrop = 0;
+      let lastHotDrop = -1;
+      let lastColdDrop = -1;
       while (run.phase !== 'over' && t < 600) {
         t += 1 / SIM.hz;
         run.deadlines(t);
         economy.tick(t);
         const gate = gateAt(dropperX(t));
         const overHot = gate === economy.hotGate;
-        if (t >= nextDrop && run.drop()) {
-          nextDrop = t + (bot === 'aimer' ? (overHot ? DROPPER.streamInterval : 1) : interval);
+        // The aimer keeps two clocks, so a cold tap never makes it miss a short HOT window: it streams the moment the
+        // dropper enters the HOT gate, and taps once a second elsewhere.
+        const due =
+          bot === 'aimer'
+            ? overHot
+              ? t - lastHotDrop >= DROPPER.streamInterval
+              : t - lastColdDrop >= 1
+            : t >= nextDrop;
+        if (due && run.drop()) {
+          nextDrop = t + interval;
+          if (overHot) lastHotDrop = t;
+          else lastColdDrop = t;
           if (world.drop(dropperX(t), economy.tag(gate))) drops++;
           else run.refund();
         }
