@@ -73,9 +73,9 @@ export const DECK = {
 export const STEPS = [
   // A short step deck (6 cm of floor ahead of its pusher) so it buffers few coins: a 9 cm one held ~100 and halved the
   // first minute's payouts.
-  { y: -2.5, front: 10, height: 1.6, depth: 14, frontMin: 4, frontMax: 7.5, period: 3.0 },
+  { y: -2.5, front: 10, height: 1.2, depth: 14, frontMin: 4, frontMax: 7.5, period: 3.0 },
   // The lower tray's pusher reaches well out (to 17 of 28 cm), so the lower pile is always being shoved toward the edge.
-  { y: -5, front: 28, height: 1.6, depth: 16, frontMin: 10, frontMax: 17, period: 3.6 },
+  { y: -5, front: 28, height: 1.2, depth: 16, frontMin: 10, frontMax: 17, period: 3.6 },
 ] as const;
 
 /** The lower tray's pusher: the last step (kept as a name for the structure's placement). */
