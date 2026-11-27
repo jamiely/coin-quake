@@ -97,7 +97,8 @@ export function prepareSmoke(win, projectRoot) {
     const file = await screenshot("electron-smoke.png");
 
     // End the run (Last Call with an empty stock): the finale, then initials (the first score always qualifies).
-    await evaluate("(() => { const g = window.coinQuake; g.lastCall(); g.run.stock = 0; })()");
+    // Fast-forward the simulation: on a slow CI runner (software rendering) simulated time crawls in real time.
+    await evaluate("(() => { const g = window.coinQuake; g.lastCall(); g.run.stock = 0; g.advance(20); })()");
     await waitFor(async () => (await state()).phase === "over", "the run ends after Last Call", 60_000);
     await waitFor(async () => (await state()).initials, "initials open after the finale", 30_000);
     // Three 0.45 s holds lock three letters.
