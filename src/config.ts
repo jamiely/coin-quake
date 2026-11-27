@@ -24,8 +24,8 @@ export const COIN_KINDS = {
   lead: { scale: 1.2, thick: 1.6, density: 26, value: 2, pitch: 0.55, odds: 5, face: '#8a8fa8', rim: '#4b4f63' },
   gold: { scale: 1.1, thick: 1.1, density: 9, value: 5, pitch: 1.25, odds: 4, face: '#fff08a', rim: '#ffb800' },
   rainbow: { scale: 1.2, thick: 1.1, density: 7, value: 10, pitch: 1.35, odds: 1, face: '#ffffff', rim: '#ff5ad1' },
-  /** The starting structure's coins: bright mint so the build stands out from the gold pile. Never dropped. */
-  build: { scale: 1, thick: 1, density: 7, value: 2, pitch: 1.1, odds: 0, face: '#7ff0c6', rim: '#e8344e' },
+  /** The starting structure: cobalt body and icy rim, distinct from every gold pile. Never dropped. */
+  build: { scale: 1, thick: 1, density: 7, value: 2, pitch: 1.1, odds: 0, face: '#1764ef', rim: '#b8efff' },
 } as const;
 export type CoinKind = keyof typeof COIN_KINDS;
 

@@ -108,6 +108,7 @@ export class Game {
     }
     this.bindInput(viewport);
     this.stage.reveal(this.physics);
+    this.fx.reveal(this.physics.structure, this.physics.buildBox?.cz ?? 0);
     this.last = performance.now();
     this.raf = requestAnimationFrame(this.frame);
   }
@@ -223,6 +224,7 @@ export class Game {
     // Rapier handles repeat across worlds: the renderer forgets every per-body cache of the old machine.
     this.stage.newWorld();
     this.stage.reveal(this.physics);
+    this.fx.reveal(this.physics.structure, this.physics.buildBox?.cz ?? 0);
     this.rebuilding = false;
   }
 

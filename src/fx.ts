@@ -222,6 +222,14 @@ export class Fx {
     this.sound.credit();
   }
 
+  /** Name the opening build above its silhouette for the full reveal. */
+  reveal(structure: 'ring' | 'pyramid' | 'columns' | 'wall', z: number): void {
+    const names = { ring: 'RING TOWER!', pyramid: 'PYRAMID!', columns: 'COLUMNS!', wall: 'THE WALL!' };
+    this.popups.show(names[structure], { x: 0, y: 19, z }, {
+      fill: '#b8efff', ink: '#2b1533', size: 4, life: 2.6, rise: 0, tilt: 0.08,
+    });
+  }
+
   /** A run starts: a coin-shower jingle and a GO! card. */
   runStart(): void {
     this.juice.fire('credit');
