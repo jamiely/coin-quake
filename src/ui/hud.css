@@ -96,8 +96,9 @@
 }
 
 .hud-prompt {
-  bottom: 30%;
-  font-size: min(calc(var(--hu) * 8.5), 10vw);
+  bottom: 14%;
+  z-index: 1;
+  font-size: min(calc(var(--hu) * 8.5), 8vw);
   color: var(--gold);
   text-shadow: 0 0.08em 0 var(--ink);
 }
@@ -160,7 +161,10 @@
 
 .hud-entry-title,
 .hud-table-title {
-  font-size: min(calc(var(--hu) * 8), 9vw);
+  max-width: 92vw;
+  font-size: min(calc(var(--hu) * 7.5), 8vw);
+  line-height: 1.1;
+  text-align: center;
   color: var(--gold);
 }
 

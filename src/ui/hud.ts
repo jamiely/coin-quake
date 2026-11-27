@@ -96,7 +96,7 @@ export class Hud {
     this.entry.replaceChildren();
     const title = document.createElement('div');
     title.className = 'hud-entry-title';
-    title.textContent = `NEW HIGH SCORE ${s.finalScore.toLocaleString('en-US')}`;
+    title.replaceChildren('NEW HIGH SCORE', document.createElement('br'), s.finalScore.toLocaleString('en-US'));
     const letters = document.createElement('div');
     letters.className = 'hud-letters';
     e.text.split('').forEach((ch, i) => {
