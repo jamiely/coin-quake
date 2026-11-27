@@ -101,10 +101,12 @@ export function prepareSmoke(win, projectRoot) {
     await evaluate("(() => { const g = window.coinQuake; g.lastCall(); g.run.stock = 0; g.advance(20); })()");
     await waitFor(async () => (await state()).phase === "over", "the run ends after Last Call", 60_000);
     await waitFor(async () => (await state()).initials, "initials open after the finale", 30_000);
-    // Three 0.45 s holds lock three letters.
+    // Three holds lock three letters. Each is held until its letter locks: on a slow runner the 0.35 s lock is
+    // simulated time, which can take far longer in real time.
+    const index = () => evaluate("(() => { const e = window.coinQuake.initials; return e ? e.index : 3; })()");
     for (let i = 0; i < 3; i++) {
       key("keyDown", "Space");
-      await pause(450);
+      await waitFor(async () => (await index()) > i, `letter ${i + 1} locks while held`, 30_000);
       key("keyUp", "Space");
       await pause(150);
     }
