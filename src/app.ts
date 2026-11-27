@@ -268,6 +268,8 @@ export class Game {
       }
     }
     for (const e of this.physics.step()) {
+      // Before a run starts (the ready screen) the machine settles on its own: nothing it spills scores, pops or counts.
+      if (this.run.phase === 'ready' && (e.type === 'frontExit' || e.type === 'sideExit')) continue;
       if (e.type === 'frontExit' && e.figurine) {
         // A prize figurine over the edge: the big prize moment.
         this.lastPrizeAt = this.simTime;
