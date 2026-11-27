@@ -63,6 +63,8 @@ export type SimEvent =
 
 /** Below the lower tray's floor: a coin this low has gone over an edge. */
 const EXIT_Y = TRAY.y - 4;
+/** A dropped coin that hasn't landed after this long is treated as landed (stuck on the machinery). */
+const MAX_FALL_SECONDS = 4;
 const SHELF_Y = PUSHER.height;
 
 /**
@@ -89,6 +91,8 @@ export class PhysicsWorld {
   private lowerPhase = Math.PI * 0.7;
   /** Dropped coins still in their first fall, with their fall speed last step (to detect the impact). */
   private readonly falling = new Map<RAPIER.RigidBody, number>();
+  /** When each dropped coin began its fall. */
+  private readonly fallStart = new Map<RAPIER.RigidBody, number>();
   /** Bodies blasted by an impact, with their blast strength, for the renderer's squash; the renderer clears it. */
   readonly blasted = new Map<number, number>();
   /** The machinery between the gates and the shelf. */
@@ -127,6 +131,7 @@ export class PhysicsWorld {
     // Drop every reference to bodies before the WASM world frees them.
     this.works.clear();
     this.falling.clear();
+    this.fallStart.clear();
     this.blasted.clear();
     this.coins.length = 0;
     this.world.free();
@@ -167,6 +172,7 @@ export class PhysicsWorld {
     // A little wobble so coins land tilted and tumble, not as perfectly flat plates.
     body.setAngvel({ x: this.rng.range(-4, 4), y: 0, z: this.rng.range(-4, 4) }, true);
     this.falling.set(body, 80);
+    this.fallStart.set(body, this.time);
     if (!this.full && this.rng.next() < FIGURINES.dropChance && this.figurines < FIGURINES.max) {
       this.addFigurine(this.rng.range(-10, 10), DECK.y + 10, this.rng.range(PUSHER.frontMax + 2, DECK.front - 2));
     }
@@ -294,7 +300,13 @@ export class PhysicsWorld {
         // Landed: its fall was stopped low enough (below the Works) to be the pile or the shelf.
         if (p.y < SHELF_Y + 3.5 && vy < fallSpeed * 0.5) {
           this.falling.delete(coin.body);
+          this.fallStart.delete(coin.body);
           events.push(this.impact(coin, p, fallSpeed));
+        } else if (this.time - (this.fallStart.get(coin.body) ?? this.time) > MAX_FALL_SECONDS) {
+          // Caught somewhere (resting on the machinery, wedged on the shelf edge): it counts as landed, without a blast,
+          // so a run waiting for "nothing still falling" can always end.
+          this.falling.delete(coin.body);
+          this.fallStart.delete(coin.body);
         } else {
           this.falling.set(coin.body, Math.max(vy, 0));
         }
@@ -311,6 +323,7 @@ export class PhysicsWorld {
           : { type: 'sideExit', x: p.x, ...(coin.figurine ? { figurine: coin.figurine } : {}) },
       );
       this.falling.delete(coin.body);
+      this.fallStart.delete(coin.body);
       this.works.remove(coin.body);
       this.world.removeRigidBody(coin.body);
       this.coins[i] = this.coins[this.coins.length - 1]!;

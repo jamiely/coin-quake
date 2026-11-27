@@ -123,6 +123,8 @@ export class Run {
   private enter(phase: RunPhase): void {
     this.phase = phase;
     this.since = this.now;
+    // Last Call caps a hoarded stock, so every run finishes soon after it.
+    if (phase === 'lastCall') this.stock = Math.min(this.stock, RUN.lastCallMaxStock);
     this.events.push(phase as RunEvent);
   }
 }

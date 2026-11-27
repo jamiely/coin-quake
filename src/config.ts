@@ -157,10 +157,15 @@ export type GateIndex = 0 | 1 | 2;
  * as Neon Reef's runs. Tuned with probes/runs.test.ts (see the numbers there).
  */
 export const RUN = {
-  startStock: 150,
+  startStock: 200,
   stockCap: 300,
-  /** Front-edge refills stop here; drop what's left. */
-  lastCallSeconds: 210,
+  /**
+   * Front-edge refills stop here; drop what's left. Measured with probes/runs.test.ts (real physics, 6 seeds each):
+   * a bot holding the button the whole time (the jammer) lasts 3:12-3:49 and three of six go broke before Last Call;
+   * a bot tapping ~1.5 coins/s lasts 4:49-6:13 (it holds back coins, so after Last Call it has more left to drop).
+   * Start 150 made the jammer go broke in ~2:00-2:30.
+   */
+  lastCallSeconds: 180,
   /** Out of coins with none falling: tray spills in this window revive the run (the deep tray pays out slowly). */
   suddenDeathSeconds: 15,
   /** Final push after the last coin: at least this long, then until the tray calms down (capped). */
@@ -173,6 +178,11 @@ export const RUN = {
   lowStock: 10,
   /** Coins a BONUS slot hit adds to the stock. */
   bonusCoins: 5,
+  /**
+   * After Last Call the stock that's left is capped here, so a careful player who hoarded coins still finishes within
+   * about a minute and a half of Last Call instead of dropping hundreds of coins.
+   */
+  lastCallMaxStock: 120,
 };
 
 export const RULES = {

@@ -50,6 +50,17 @@ describe('coin run', () => {
     expect(t).toBeLessThan(RUN.lastCallSeconds);
   });
 
+  it('Last Call caps a hoarded stock so the run finishes soon after', () => {
+    const run = started();
+    run.stock = RUN.stockCap;
+    run.callLast();
+    expect(run.stock).toBe(RUN.lastCallMaxStock);
+    const small = started();
+    small.stock = 3;
+    small.callLast();
+    expect(small.stock).toBe(3);
+  });
+
   it('warns once when the stock falls to the low mark', () => {
     const run = started();
     run.stock = RUN.lowStock + 1;
