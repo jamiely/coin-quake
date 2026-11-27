@@ -3,7 +3,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
-import { DROPPER, GATES, LOWER, PUSHER, type GateIndex } from '../config';
+import { DROPPER, GATES, PUSHER, STEPS, type GateIndex } from '../config';
 
 /** Seconds the opening shot of the structure lasts. */
 const REVEAL_TIME = 2.6;
@@ -131,7 +131,7 @@ export class Stage {
 
   update(physics: PhysicsWorld, s: StageState, time: number, realTime: number): void {
     this.machine.pusher.position.z = physics.pusherFront - PUSHER.depth / 2;
-    this.machine.lower.position.z = physics.lowerFront - LOWER.depth / 2;
+    this.machine.steps.forEach((g, i) => (g.position.z = physics.stepFronts[i]! - STEPS[i]!.depth / 2));
     this.updateReveal(realTime);
     this.works ??= new WorksView(this.scene, physics.works.pegs.length);
     this.works.update(physics.works, realTime);
@@ -280,17 +280,17 @@ export class Stage {
   }
 
   applyCamera(juice: Juice): void {
-    if (this.revealAt && this.revealK > 0) {
-      // Blend from a close, low shot of the structure to home.
-      const k = this.revealK;
-      // A three-quarter shot from above and in front: the whole build fills the middle of the screen.
-      const close = this.reveal_.set(this.revealAt.x + 6, this.revealAt.y + 34, this.revealAt.z + 52);
-      this.camera.position.lerpVectors(this.home, close, k);
-      this.lookTmp.lerpVectors(this.lookAt, this.revealAt, k);
+    // The opening (the user: "seems like the machine spins everywhere ... nauseating"): no rotation and no swing. The
+    // camera stays on its home line of sight and only eases a gentle 18% closer toward the structure, then back.
+    const k = this.revealAt ? this.revealK : 0;
+    const { shake, kick } = juice;
+    if (k > 0) {
+      this.reveal_.copy(this.home).lerp(this.revealAt!, 0.18 * k);
+      this.camera.position.copy(this.reveal_);
+      this.lookTmp.copy(this.lookAt).lerp(this.revealAt!, 0.18 * k);
       this.camera.lookAt(this.lookTmp);
       return;
     }
-    const { shake, kick } = juice;
     this.camera.position.set(this.home.x + shake.x + kick.x, this.home.y + shake.y + kick.y, this.home.z);
     this.camera.lookAt(this.lookAt.x + shake.x * 0.5, this.lookAt.y + shake.y * 0.5, this.lookAt.z);
     this.camera.rotateZ(shake.roll);

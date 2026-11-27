@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { DECK, DROPPER, GATES, LOWER, PUSHER, TRAY } from '../config';
+import { DECK, DROPPER, GATES, LOWER, PUSHER, STEPS, TRAY } from '../config';
 import { backWall, chunkyText, roundRect, signCanvas } from './textures';
 import { INK, PALETTE, outlined, toon } from './toon';
 
@@ -8,6 +8,8 @@ export interface Machine {
   pusher: THREE.Group;
   /** The lower tray's pusher, sliding out from under the deck's step. */
   lower: THREE.Group;
+  /** Every step pusher, top step first (the last one is `lower`). */
+  steps: THREE.Group[];
   carriage: THREE.Group;
   /** Bolt, the little robot riding the carriage (eyes are children). */
   bolt: THREE.Group;
@@ -42,16 +44,21 @@ export function buildMachine(scene: THREE.Scene): Machine {
   wall.position.set(0, 30, -45);
   scene.add(wall);
 
-  // Three tiers. The middle deck (mint inlay) is a raised floor with a striped step face; the deep lower tray (cream,
-  // with a gold inlay) runs out to the front edge.
+  // Four tiers: deck 1 under the shelf, then each step deck down to the deep lower tray. Every deck is a cream floor
+  // with its own inlay colour and a gold step face where it drops to the next floor.
   const deckBack = TRAY.back;
-  scene.add(box(2 * hw, DECK.thickness, DECK.front - deckBack, cream, 0, DECK.y - DECK.thickness / 2, (DECK.front + deckBack) / 2));
-  const deckInlay = new THREE.Mesh(new THREE.PlaneGeometry(2 * hw - 4, DECK.front - PUSHER.frontMax - 1.5), toon('#c9f5e3'));
-  deckInlay.rotation.x = -Math.PI / 2;
-  deckInlay.position.set(0, DECK.y + 0.02, (DECK.front + PUSHER.frontMax) / 2);
-  scene.add(deckInlay);
-  const stepH = DECK.y - DECK.thickness - (TRAY.y + LOWER.height) - 0.15;
-  scene.add(box(2 * hw, stepH, 0.6, toon(PALETTE.goldDark), 0, TRAY.y + LOWER.height + 0.15 + stepH / 2, DECK.front - 0.3, 0.2));
+  const decks = [{ y: DECK.y, front: DECK.front, back: PUSHER.frontMax }, ...STEPS.slice(0, -1).map((st) => ({ y: st.y, front: st.front, back: st.frontMax }))];
+  const inlays = ['#c9f5e3', '#ffd9e6'];
+  decks.forEach((deck, i) => {
+    const below = STEPS[i]!;
+    scene.add(box(2 * hw, DECK.thickness, deck.front - deckBack, cream, 0, deck.y - DECK.thickness / 2, (deck.front + deckBack) / 2));
+    const deckInlay = new THREE.Mesh(new THREE.PlaneGeometry(2 * hw - 4, deck.front - deck.back - 1.5), toon(inlays[i % inlays.length]!));
+    deckInlay.rotation.x = -Math.PI / 2;
+    deckInlay.position.set(0, deck.y + 0.02, (deck.front + deck.back) / 2);
+    scene.add(deckInlay);
+    const stepH = deck.y - DECK.thickness - (below.y + below.height) - 0.15;
+    scene.add(box(2 * hw, stepH, 0.6, toon(PALETTE.goldDark), 0, below.y + below.height + 0.15 + stepH / 2, deck.front - 0.3, 0.2));
+  });
   scene.add(box(2 * hw, 2, TRAY.front - TRAY.back, cream, 0, TRAY.y - 1, (TRAY.front + TRAY.back) / 2));
   const inlay = new THREE.Mesh(new THREE.PlaneGeometry(2 * hw - 4, TRAY.front - LOWER.frontMax - 3), toon('#ffe2b0'));
   inlay.rotation.x = -Math.PI / 2;
@@ -82,12 +89,17 @@ export function buildMachine(scene: THREE.Scene): Machine {
   pusher.add(stripe);
   pusher.position.y = PUSHER.height / 2;
   scene.add(pusher);
-  // Lower pusher: a low mint block with a cherry stripe, so the three tiers read as three different machines.
-  const lower = new THREE.Group();
-  lower.add(box(2 * hw - 0.1, LOWER.height, LOWER.depth, toon('#2f8f7a'), 0, 0, 0));
-  lower.add(box(2 * hw - 0.2, 0.5, 0.2, toon(PALETTE.cherry), 0, 0.3, LOWER.depth / 2 + 0.05, 0));
-  lower.position.y = TRAY.y + LOWER.height / 2;
-  scene.add(lower);
+  // Step pushers: low blocks with a stripe, each its own colour, so every tier reads as a different machine.
+  const stepColors = ['#2f8f7a', '#3b5fae'];
+  const steps = STEPS.map((st, i) => {
+    const g = new THREE.Group();
+    g.add(box(2 * hw - 0.1, st.height, st.depth, toon(stepColors[i % stepColors.length]!), 0, 0, 0));
+    g.add(box(2 * hw - 0.2, 0.5, 0.2, toon(i % 2 ? PALETTE.gold : PALETTE.cherry), 0, 0.3, st.depth / 2 + 0.05, 0));
+    g.position.y = st.y + st.height / 2;
+    scene.add(g);
+    return g;
+  });
+  const lower = steps[steps.length - 1]!;
 
   // Scraper wall and the glass front of the drop zone.
   const scraperH = DROPPER.y - PUSHER.height + 10;
@@ -220,7 +232,7 @@ export function buildMachine(scene: THREE.Scene): Machine {
   gauge.position.set(hw - 2.5, DROPPER.y + 19.5, DROPPER.z + 7);
   scene.add(gauge);
 
-  return { pusher, lower, carriage, bolt, claw, laser, gates, counter, edgeLights, sideLights, gauge: { group: gauge, needle, face: faceMat }, topper: topperMesh };
+  return { pusher, lower, steps, carriage, bolt, claw, laser, gates, counter, edgeLights, sideLights, gauge: { group: gauge, needle, face: faceMat }, topper: topperMesh };
 }
 
 /** Gauge dial: cream face, green-to-red arc over 240 degrees, ticks, and "PSI". */
