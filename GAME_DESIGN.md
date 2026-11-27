@@ -449,6 +449,12 @@ volume (configurable), since a cabinet in a room should not blare.
 
 ### 5.4 Credits
 
+> **Superseded (round 4):** endless free play with C credits was replaced by runs with an ending, modelled on Neon
+> Reef. A press starts a run with 200 coins, and front payouts refill the stock. LAST CALL comes at 3:00: refills
+> stop, the stock is capped at 120, and the run ends within 75 s. Then a final push, the GAME OVER finale, initials
+> (0.35 s hold) and a local high-score table, then play again on a fresh machine. C only plays a jingle. Runs last
+> 3–5 minutes (bot-measured).
+
 - **C** adds 5 credits = 50 COINS (one press, no key repeat), with a "ka-ching" and coins visibly pouring into the
   bank tube.
 - Free play mode is a config switch, on by default for a home cabinet. Coins still matter as the pusher

@@ -3,24 +3,37 @@
 A one-button cartoon coin pusher for the Vermilion arcade cabinet (portrait 1050x1680). The design, approved
 decisions and roadmap are in [GAME_DESIGN.md](GAME_DESIGN.md).
 
-**Phase 1 (this build): the playable core.**
+**This build:**
 
-- A swinging dropper carriage with a laser guide line, three gates (L/C/R), and a HOT tag that moves every 20–30 s
-  and doubles the points of coins dropped through it.
-- Rapier coin physics (flat cylinder coins, SIMD build) on a two-tier pusher, capped at 350 live coins.
-- Coins pushed off the front return to your bank and score points; coins off the sides are lost.
-- Cartoon look: toon shading, ink outlines, chunky outlined text, and placeholder procedural art.
+- **The machine:**
+  - A swinging dropper carriage with a laser guide line, three gates (L/C/R), and a HOT tag that moves every
+    20–30 s and doubles the points of coins dropped through it.
+  - The Works over the drop zone: gear, peg field, BONUS slot, pipe loop, flippers and Tesla coils.
+  - Rapier coin physics on four pusher tiers, capped at 350 live coins.
+  - A random starting structure (ring tower, pyramid, columns, wall) in cobalt coins, revealed and named at the
+    start, with a TIMBER! when it falls.
+- **Runs with an ending:**
+  - A press starts a run with 200 coins. Coins pushed off the front score points and refill the stock; coins off
+    the sides are lost.
+  - At 3:00 comes LAST CALL: refills stop, a hoarded stock is capped at 120, and the run ends within 75 s.
+  - A final push, then the GAME OVER finale (an original "Jackpot March"), one-button initials (tap: next letter,
+    0.35 s hold: lock it), the high-score table (saved locally) and play again on a freshly built machine.
+  - Bot runs on the real physics last 3–5 minutes.
+- **Juice:** shake, hit-stop, flashes, slow-mo, particles, popups, QUAKE fever, coin dumps and prize-toy banners.
+  The screen only shakes on your drops and on big events, never on ambient machine activity.
+- **Cartoon look:** toon shading, ink outlines, chunky outlined text, and placeholder procedural art.
 
 ## Controls
 
 | Key | Action |
 |---|---|
 | Space / click | Tap to drop one coin; hold to stream 4 coins a second |
-| C | +50 coins (the cabinet's credit button; key repeats are ignored) |
+| C | The cabinet's credit button: free play needs no credits, so it only plays a jingle (hold 1.5 s to exit is handled by the cabinet's AutoHotkey script) |
 | F11 | Toggle fullscreen (desktop app) |
 | Esc | Quit (desktop app) |
 
-Free play is on: an empty bank refills after 10 s.
+Free play: every run starts with 200 coins and needs no credits. Debug keys with `?debug`: S fills the machine, Q
+QUAKEs, D dumps, L calls Last Call.
 
 ## Development
 
