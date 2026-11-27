@@ -140,7 +140,8 @@
 .hud-prompt {
   bottom: 14%;
   z-index: 1;
-  font-size: min(calc(var(--hu) * 8.5), 8vw);
+  /* "PRESS TO PLAY AGAIN" (19 characters) must fit any portrait width. */
+  font-size: min(calc(var(--hu) * 8.5), 6vw);
   color: var(--gold);
   text-shadow: 0 0.08em 0 var(--ink);
 }

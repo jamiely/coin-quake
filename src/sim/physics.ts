@@ -492,13 +492,13 @@ export class PhysicsWorld {
     // Centred in the strip, but never closer than its own half-depth plus the moat to the front edge.
     const zFrom = LOWER.frontMax + 1.5;
     const zTo = TRAY.front - 2.5;
-    const depthHalf = structure === 'wall' ? 1.6 : structure === 'columns' ? 4.2 : 6.1;
-    const cz = Math.min((zFrom + zTo) / 2, TRAY.front - depthHalf - 3.5);
+    const depthHalf = structure === 'wall' || structure === 'columns' ? 1.6 : structure === 'ring' ? 5.5 : 6.1;
+    const cz = Math.min((zFrom + zTo) / 2, TRAY.front - depthHalf - 2);
     // Clear the footprint plus a 3 cm moat down to the tray floor, so the build stands alone with bare floor around it
     // (the user: "give it some padding when it spawns") and reads as a shape, not as part of the pile.
     const pad = 3;
-    const halfX = (structure === 'ring' ? 6.1 : structure === 'pyramid' ? 7.6 : 14.8) + pad;
-    const halfZ = (structure === 'wall' ? 1.6 : structure === 'columns' ? 4.2 : 6.1) + pad;
+    const halfX = (structure === 'ring' ? 5.5 : structure === 'pyramid' ? 7.6 : 14.8) + pad;
+    const halfZ = depthHalf + pad;
     for (let i = this.coins.length - 1; i >= 0; i--) {
       const c = this.coins[i]!;
       const p = c.body.translation();
@@ -518,9 +518,9 @@ export class PhysicsWorld {
     switch (structure) {
       case 'ring': {
         // A ring tower: rings of coins standing on their faces, stacked into a hollow cylinder.
-        // 9 coins per ring: 12 on this radius overlapped their neighbours and burst apart at boot.
-        const n = 9;
-        const r = 4.6;
+        // 8 coins per ring of radius 4: 12 overlapped their neighbours and burst apart at boot; this keeps it off the pusher.
+        const n = 8;
+        const r = 4;
         const base = top();
         for (let level = 0; level < 10; level++) {
           for (let i = 0; i < n; i++) {
@@ -545,10 +545,12 @@ export class PhysicsWorld {
       }
       case 'columns': {
         // Tall coin stacks dotted across the tray, wobbly and begging to be knocked over.
-        for (const [x, dz] of [[-11, 0], [-5.5, -2.5], [0, 1.5], [5.5, -2.5], [11, 0]] as const) {
+        // One row, clear of the lower pusher's reach (a staggered row reached into it and was shoved over at boot).
+        for (const [x, dz] of [[-11, 0], [-5.5, 0], [0, 0], [5.5, 0], [11, 0]] as const) {
           const z = cz + dz;
           const base = top();
-          for (let level = 0; level < 14; level++) place(x + this.rng.range(-0.08, 0.08), z + this.rng.range(-0.08, 0.08), base + 0.02 + level * t);
+          // Straight stacks of 10: taller jittered ones were already toppling during the opening reveal.
+          for (let level = 0; level < 10; level++) place(x, z, base + 0.02 + level * t);
         }
         break;
       }
