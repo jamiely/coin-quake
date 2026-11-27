@@ -1,5 +1,5 @@
 import RAPIER from '@dimforge/rapier3d-simd-compat';
-import { COIN, COIN_KINDS, DECK, DROPPER, DUMP, FIGURINES, GRAVITY, IMPACT, LOWER, MAX_COINS, PUSHER, RULES, SIM, TRAY, type CoinKind } from '../config';
+import { COIN, COIN_KINDS, DECK, DROPPER, DUMP, FIGURINES, GRAVITY, IMPACT, LOWER, MAX_COINS, PUSHER, RULES, SIM, STEPS, TRAY, type CoinKind } from '../config';
 import type { CoinTag } from '../rules/economy';
 import type { Rng } from '../rng';
 import { Works, type WorksEvent } from './works';
@@ -75,8 +75,12 @@ export class PhysicsWorld {
   readonly world: RAPIER.World;
   readonly coins: Coin[] = [];
   pusherFront: number = PUSHER.frontMin;
-  /** The lower pusher's front face. */
-  lowerFront: number = LOWER.frontMin;
+  /** Each step pusher's front face, top step first. */
+  readonly stepFronts: number[] = STEPS.map((s) => s.frontMin);
+  /** The lowest step pusher's front face (the lower tray's pusher). */
+  get lowerFront(): number {
+    return this.stepFronts[this.stepFronts.length - 1]!;
+  }
   /** Stroke rate multiplier (the Last Call sweep speeds both pushers up). */
   pusherSpeed = 1;
   /** Milliseconds spent in the last `step()`, for the perf HUD. */
@@ -84,11 +88,12 @@ export class PhysicsWorld {
   /** The structure this session started with. */
   readonly structure: Structure;
   private readonly pusher: RAPIER.RigidBody;
-  private readonly lower: RAPIER.RigidBody;
+  private readonly stepPushers: RAPIER.RigidBody[] = [];
   private time = 0;
   /** Stroke phases (radians), advanced by pusherSpeed so a speed change never jumps a pusher. */
   private upperPhase = 0;
-  private lowerPhase = Math.PI * 0.7;
+  /** Step phases start staggered so the tiers never shove in unison. */
+  private readonly stepPhases: number[] = STEPS.map((_, i) => Math.PI * (0.7 + 0.55 * i));
   /** Dropped coins still in their first fall, with their fall speed last step (to detect the impact). */
   private readonly falling = new Map<RAPIER.RigidBody, number>();
   /** When each dropped coin began its fall. */
@@ -100,6 +105,8 @@ export class PhysicsWorld {
   private readonly bodies: RAPIER.RigidBody[] = [];
   private nextDump: number;
   private collapsed = false;
+  /** The structure's cleared area (centre z and half extents), for the renderer's outline and the opening card. */
+  buildBox: { cz: number; halfX: number; halfZ: number } | null = null;
   private dumpAt = -1;
 
   static async create(rng: Rng): Promise<PhysicsWorld> {
@@ -117,10 +124,13 @@ export class PhysicsWorld {
       RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(0, PUSHER.height / 2, this.pusherFront - PUSHER.depth / 2),
     );
     this.world.createCollider(RAPIER.ColliderDesc.cuboid(TRAY.halfWidth - 0.05, PUSHER.height / 2, PUSHER.depth / 2).setFriction(0.4), this.pusher);
-    this.lower = this.world.createRigidBody(
-      RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(0, TRAY.y + LOWER.height / 2, this.lowerFront - LOWER.depth / 2),
-    );
-    this.world.createCollider(RAPIER.ColliderDesc.cuboid(TRAY.halfWidth - 0.05, LOWER.height / 2, LOWER.depth / 2).setFriction(0.4), this.lower);
+    STEPS.forEach((st, i) => {
+      const body = this.world.createRigidBody(
+        RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(0, st.y + st.height / 2, this.stepFronts[i]! - st.depth / 2),
+      );
+      this.world.createCollider(RAPIER.ColliderDesc.cuboid(TRAY.halfWidth - 0.05, st.height / 2, st.depth / 2).setFriction(0.4), body);
+      this.stepPushers.push(body);
+    });
     this.works = new Works(this.world, rng);
     this.structure = STRUCTURES[Math.floor(rng.next() * STRUCTURES.length)]!;
     this.fillTray();
@@ -216,11 +226,14 @@ export class PhysicsWorld {
     this.time += this.world.timestep;
     const dt = this.world.timestep * this.pusherSpeed;
     this.upperPhase += (2 * Math.PI * dt) / PUSHER.period;
-    this.lowerPhase += (2 * Math.PI * dt) / LOWER.period;
     this.pusherFront = PUSHER.frontMin + (PUSHER.frontMax - PUSHER.frontMin) * (0.5 - 0.5 * Math.cos(this.upperPhase));
-    this.lowerFront = LOWER.frontMin + (LOWER.frontMax - LOWER.frontMin) * (0.5 - 0.5 * Math.cos(this.lowerPhase));
     this.pusher.setNextKinematicTranslation({ x: 0, y: PUSHER.height / 2, z: this.pusherFront - PUSHER.depth / 2 });
-    this.lower.setNextKinematicTranslation({ x: 0, y: TRAY.y + LOWER.height / 2, z: this.lowerFront - LOWER.depth / 2 });
+    STEPS.forEach((st, i) => {
+      this.stepPhases[i]! += (2 * Math.PI * dt) / st.period;
+      const front = st.frontMin + (st.frontMax - st.frontMin) * (0.5 - 0.5 * Math.cos(this.stepPhases[i]!));
+      this.stepFronts[i] = front;
+      this.stepPushers[i]!.setNextKinematicTranslation({ x: 0, y: st.y + st.height / 2, z: front - st.depth / 2 });
+    });
     // Cartoon gravity: dropped coins fall harder than physics would, so they slam into the pile.
     const dv = IMPACT.extraGravity * this.world.timestep;
     for (const body of this.falling.keys()) {
@@ -398,15 +411,22 @@ export class PhysicsWorld {
 
   private buildTray(): void {
     const hw = TRAY.halfWidth;
-    // Lower tray floor, deep and below the deck.
+    // Lower tray floor, the deepest.
     this.addStaticBox(hw, 1, (TRAY.front - TRAY.back) / 2, 0, TRAY.y - 1, (TRAY.front + TRAY.back) / 2);
-    // Middle deck: a raised floor from the back wall to its front step, swept by the upper pusher. The lower pusher
-    // slides out from under the step, whose face scrapes coins off the lower pusher's top as it retracts.
+    // Each deck: a raised floor from the back wall to its front step. The step pusher below slides out from under the
+    // step, whose face scrapes coins off that pusher's top as it retracts. Deck 1 is swept by the upper pusher.
     const deckBack = TRAY.back;
-    this.addStaticBox(hw, DECK.thickness / 2, (DECK.front - deckBack) / 2, 0, DECK.y - DECK.thickness / 2, (DECK.front + deckBack) / 2);
-    this.addStaticBox(hw, (DECK.y - DECK.thickness - (TRAY.y + LOWER.height) - 0.15) / 2, (DECK.front - deckBack) / 2, 0, (DECK.y - DECK.thickness + TRAY.y + LOWER.height + 0.15) / 2, (DECK.front + deckBack) / 2);
+    const decks = [{ y: DECK.y, front: DECK.front }, ...STEPS.slice(0, -1).map((st) => ({ y: st.y, front: st.front }))];
+    decks.forEach((deck, i) => {
+      const below = STEPS[i]!;
+      this.addStaticBox(hw, DECK.thickness / 2, (deck.front - deckBack) / 2, 0, deck.y - DECK.thickness / 2, (deck.front + deckBack) / 2);
+      const top = deck.y - DECK.thickness;
+      const bottom = below.y + below.height + 0.15;
+      this.addStaticBox(hw, (top - bottom) / 2, (deck.front - deckBack) / 2, 0, (top + bottom) / 2, (deck.front + deckBack) / 2);
+    });
     const railFront = TRAY.front - TRAY.openCorner;
     const tallFront = DECK.front + 1;
+    // Low rails along the step decks too, up to where the open corners start.
     for (const side of [-1, 1]) {
       // Tall walls beside the pushers and up to the dropper keep falling coins in; low rails stop short of the corners.
       this.addStaticBox(0.5, (DROPPER.y - TRAY.y) / 2 + 2, (tallFront - TRAY.back) / 2, side * (hw + 0.5), (DROPPER.y + TRAY.y) / 2, (tallFront + TRAY.back) / 2);
@@ -429,16 +449,18 @@ export class PhysicsWorld {
     const xMax = TRAY.halfWidth - COIN.radius - 0.5;
     const perLayer = 70;
     // Most of the pile sits on the deep lower tray; a share rides the middle deck in front of the upper pusher.
-    const deckShare = 0.3;
+    // The pile is spread over every floor: deck 1 in front of the upper pusher, then each step's floor in front of its
+    // pusher. Each band gets an equal share.
+    const bands = [
+      { y: DECK.y, zMin: PUSHER.frontMax + COIN.radius + 0.3, zMax: DECK.front - COIN.radius - 0.5 },
+      ...STEPS.map((st, i) => ({ y: st.y, zMin: st.frontMin + COIN.radius + 0.5, zMax: (i === STEPS.length - 1 ? TRAY.front - 4 : st.front) - COIN.radius - 0.5 })),
+    ];
+    const per = Math.ceil(RULES.startPile / bands.length);
     for (let i = 0; i < RULES.startPile; i++) {
-      const onDeck = i < RULES.startPile * deckShare;
-      const n = onDeck ? i : i - Math.floor(RULES.startPile * deckShare);
-      const layer = Math.floor(n / perLayer);
+      const band = bands[Math.floor(i / per)]!;
+      const layer = Math.floor((i % per) / perLayer);
       const kind = this.rng.next() < 0.12 ? pickKind(this.rng.next()) : 'standard';
-      const [y0, zMin, zMax] = onDeck
-        ? [DECK.y, PUSHER.frontMax + COIN.radius + 0.3, DECK.front - COIN.radius - 0.5]
-        : [TRAY.y, LOWER.frontMin + COIN.radius + 0.5, TRAY.front - COIN.radius - 4];
-      this.addCoin(this.rng.range(-xMax, xMax), y0 + 1 + layer * 1.4 + this.rng.range(0, 0.4), this.rng.range(zMin, zMax), null, kind);
+      this.addCoin(this.rng.range(-xMax, xMax), band.y + 1 + layer * 1.4 + this.rng.range(0, 0.4), this.rng.range(band.zMin, band.zMax), null, kind);
     }
     const fence = this.world.createRigidBody(RAPIER.RigidBodyDesc.fixed());
     this.world.createCollider(RAPIER.ColliderDesc.cuboid(TRAY.halfWidth + 1, 6, 0.5).setTranslation(0, TRAY.y + 6, TRAY.front + 0.5), fence);
@@ -467,20 +489,25 @@ export class PhysicsWorld {
    */
   private build(structure: Structure): void {
     // In the clear strip between the lower pusher's full reach and the front edge, so nothing pushes it at boot.
+    // Centred in the strip, but never closer than its own half-depth plus the moat to the front edge.
     const zFrom = LOWER.frontMax + 1.5;
     const zTo = TRAY.front - 2.5;
-    const cz = (zFrom + zTo) / 2;
-    // Clear a flat footprint down to the tray floor first: stacked on the lumpy pile, builds slumped before play began.
-    const halfX = structure === 'ring' ? 7.5 : 15;
-    const halfZ = (zTo - zFrom) / 2;
+    const depthHalf = structure === 'wall' ? 1.6 : structure === 'columns' ? 4.2 : 6.1;
+    const cz = Math.min((zFrom + zTo) / 2, TRAY.front - depthHalf - 3.5);
+    // Clear the footprint plus a 3 cm moat down to the tray floor, so the build stands alone with bare floor around it
+    // (the user: "give it some padding when it spawns") and reads as a shape, not as part of the pile.
+    const pad = 3;
+    const halfX = (structure === 'ring' ? 6.1 : structure === 'pyramid' ? 7.6 : 14.8) + pad;
+    const halfZ = (structure === 'wall' ? 1.6 : structure === 'columns' ? 4.2 : 6.1) + pad;
     for (let i = this.coins.length - 1; i >= 0; i--) {
       const c = this.coins[i]!;
       const p = c.body.translation();
-      if (c.figurine || Math.abs(p.x) > halfX || Math.abs(p.z - cz) > halfZ || p.y > DECK.y - 0.6) continue;
+      if (c.figurine || Math.abs(p.x) > halfX || Math.abs(p.z - cz) > halfZ || p.y > TRAY.y + 6) continue;
       this.world.removeRigidBody(c.body);
       this.coins[i] = this.coins[this.coins.length - 1]!;
       this.coins.pop();
     }
+    this.buildBox = { cz, halfX, halfZ };
     const top = () => TRAY.y + COIN.halfThickness;
     const t = COIN.halfThickness * 2 + 0.02;
     const place = (x: number, z: number, y: number) => {
@@ -491,7 +518,8 @@ export class PhysicsWorld {
     switch (structure) {
       case 'ring': {
         // A ring tower: rings of coins standing on their faces, stacked into a hollow cylinder.
-        const n = 12;
+        // 9 coins per ring: 12 on this radius overlapped their neighbours and burst apart at boot.
+        const n = 9;
         const r = 4.6;
         const base = top();
         for (let level = 0; level < 10; level++) {

@@ -51,30 +51,39 @@ export const FIGURINES = {
 export const DUMP = { minGap: 45, maxGap: 90, warning: 1.6, coins: 45, spread: 9 };
 
 /**
- * Three tiers (the user: "add a couple more layers", "make the ground extend farther out"). Coins land on the top shelf
- * (the upper pusher's top), are scraped onto the middle deck, which its own pusher shoves over a drop onto the lower
- * tray, whose front edge pays. `y` is each surface's height; the lower tray is the deepest and slowest.
+ * Four tiers (the user: "add a couple more layers", then "add another level"). Coins land on the top shelf (the upper
+ * pusher's top) and are scraped onto deck 1; below that every tier is a deck whose front face is a step down to the next
+ * floor, with a step pusher sliding out from under it. The last floor is the lower tray, whose front edge pays.
+ * `y` is each floor's height.
  */
 export const DECK = {
-  /** The middle deck: the floor the upper pusher sweeps; its front face is a step down to the lower tray. */
+  /** Deck 1: the floor the upper pusher sweeps; its front face is a step down to deck 2. */
   y: 0,
   thickness: 1,
   front: 8,
 };
 
 /**
- * The lower pusher: a low block on the lower tray that slides out from under the deck's step. Coins that drop onto its
- * top are scraped off by the step face as it retracts, just like the shelf and the scraper wall above. Its own rhythm.
+ * Steps below deck 1, top to bottom. Each is a floor at `y` reaching to `front`, swept by a pusher of `height` that
+ * slides out from under the deck above (its `frontMin`..`frontMax`, each with its own rhythm). The step face above
+ * scrapes coins off the pusher's top as it retracts, like the scraper wall on the shelf. The last entry is the lower
+ * tray: its `front` is the paying edge (TRAY.front).
  */
-export const LOWER = { height: 1.7, depth: 16, frontMin: 8, frontMax: 13, period: 3.3 };
+export const STEPS = [
+  { y: -2.5, front: 17, height: 1.6, depth: 14, frontMin: 8, frontMax: 12, period: 3.0 },
+  { y: -5, front: 31, height: 1.6, depth: 14, frontMin: 17, frontMax: 21, period: 3.6 },
+] as const;
+
+/** The lower tray's pusher: the last step (kept as a name for the structure's placement). */
+export const LOWER = STEPS[STEPS.length - 1]!;
 
 /** The lower tray: coins pushed past `front` fall off and pay; past the open corners they fall off the sides. */
 export const TRAY = {
   halfWidth: 18,
   back: -32,
-  /** Floor height: below the middle deck, so coins drop a step. */
-  y: -3,
-  front: 26,
+  /** Floor height: the last step's floor. */
+  y: -5,
+  front: 31,
   /** Side rails stop this far short of the front edge, so coins at the corners are lost. */
   openCorner: 5,
   railHeight: 3,
