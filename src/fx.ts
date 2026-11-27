@@ -41,7 +41,6 @@ export const RECIPES: Record<string, Partial<Record<Weight, Recipe>>> = {
 
 const RAINBOW = ['#ff4d6d', '#ffa53d', '#ffe14a', '#5fe07a', '#4dc3ff', '#a77bff'];
 const KIND_LABEL: Partial<Record<CoinKind, string>> = { jumbo: 'JUMBO!', lead: 'HEAVY!', gold: 'GOLD!', rainbow: 'RAINBOW!!' };
-const FIGURINE_NAMES: Record<string, string> = { critter: 'GEAR CRITTER', professor: 'MINI PROFESSOR', bolt: 'BOLT TOY', duck: 'BRASS DUCK' };
 
 /** Pressure alone never moves the camera. */
 const RUMBLE: Record<Tier, number> = { 0: 0, 1: 0, 2: 0, 3: 0 };
@@ -187,9 +186,9 @@ export class Fx {
 
   /**
    * A prize figurine pushed off the front: the big prize moment. Freeze, flash, a confetti and gold burst, a prize
-   * popup naming the toy, and a squeaky fanfare.
+   * points popup and a squeaky fanfare. The HUD owns the toy portrait banner.
    */
-  prize(x: number, figurine: string, won: number): void {
+  prize(x: number, won: number): void {
     this.juice.fire('prize', 3);
     this.sound.prize();
     this.confetti(220);
@@ -197,7 +196,7 @@ export class Fx {
     this.particles.burst({ at, count: 80, color: PALETTE.gold, speed: 70, dir: { x: 0, y: 1, z: 0.4 }, spread: 0.7, size: 1, life: 0.9, gravity: -70, shape: 'chip', spin: true }, this.rand);
     this.particles.burst({ at, count: 40, color: '#ffffff', speed: 45, size: 1.2, life: 0.4, drag: 4 }, this.rand);
     this.volley(2, 0.6);
-    this.overlay.titleCard('PRIZE!', PALETTE.gold, `${FIGURINE_NAMES[figurine] ?? 'FIGURINE'} +${won}`, 1.3, 3);
+    this.popups.show(`+${won}`, at, { fill: PALETTE.gold, ink: '#2b1533', size: 3, life: 1.3, rise: 8 });
   }
 
   /** A coin dump is coming: siren and flashing warning, but no camera shake. */

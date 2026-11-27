@@ -1,3 +1,45 @@
+.hud-toys {
+  position: absolute;
+  top: calc(var(--hu) * 12);
+  right: calc(var(--hu) * 3);
+  display: flex;
+  align-items: center;
+  padding: calc(var(--hu) * 0.8);
+  border: calc(var(--hu) * 0.4) solid var(--ink);
+  border-radius: calc(var(--hu) * 2);
+  background: var(--plum);
+  font-size: calc(var(--hu) * 2.4);
+}
+.hud-toys canvas { width: calc(var(--hu) * 5); height: calc(var(--hu) * 5); }
+.hud-prize {
+  position: absolute;
+  top: 48%;
+  left: 6%;
+  width: 88%;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--hu) * 2);
+  background: var(--cream);
+  border: calc(var(--hu) * 0.9) solid var(--ink);
+  border-radius: calc(var(--hu) * 3);
+  box-shadow: 0 calc(var(--hu) * 1.2) 0 var(--cherry);
+  visibility: hidden;
+}
+.hud-prize.on { visibility: visible; animation: prize-sweep 1.5s both; }
+.hud-prize canvas { width: calc(var(--hu) * 20); height: calc(var(--hu) * 20); }
+.hud-prize strong { display: block; font-size: calc(var(--hu) * 8); color: var(--cherry); transform: rotate(-4deg); }
+.hud-prize span { display: block; font-size: calc(var(--hu) * 3.8); color: var(--ink); -webkit-text-stroke: 0; margin-top: calc(var(--hu) * 1.2); }
+.hud-toy-list { font-size: calc(var(--hu) * 2.5); margin-top: calc(var(--hu) * 2); }
+.hud-toy-list > div { display: flex; align-items: center; justify-content: center; }
+.hud-toy-list canvas { width: calc(var(--hu) * 6); height: calc(var(--hu) * 6); }
+@keyframes prize-sweep {
+  0% { transform: translateX(-120%) rotate(-5deg); }
+  18%, 78% { transform: translateX(0) rotate(-2deg); }
+  100% { transform: translateX(120%) rotate(5deg); }
+}
+
 /* Run HUD: chunky outlined cartoon text, sized in --hu so it fits portrait and landscape alike. */
 .hud {
   --hu: min(1vw, 0.625vh);

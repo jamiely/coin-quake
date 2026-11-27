@@ -202,6 +202,7 @@ export class Game {
     }
     this.runs++;
     this.run.start(this.simTime);
+    this.hud.resetToys();
     this.fx.runStart();
     this.hud.toast(`${RUN.startStock} COINS`);
   }
@@ -270,7 +271,8 @@ export class Game {
         this.lastPrizeAt = this.simTime;
         const won = this.economy.prize(FIGURINES.points * this.pressure.multiplier);
         this.run.coinsOut(refillFor(e.kind, e.figurine));
-        this.fx.prize(e.x, e.figurine, won);
+        this.fx.prize(e.x, won);
+        this.hud.collectToy(e.figurine);
         for (const pe of this.pressure.machine(20)) this.fx.pressure(pe);
       } else if (e.type === 'frontExit') {
         this.lastPayAt = this.simTime;

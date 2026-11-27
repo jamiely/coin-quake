@@ -1,3 +1,5 @@
+import type { FigurineKind } from '../sim/physics';
+import { TOY_NAMES, toyPicture } from './toys';
 import type { HighScore, InitialsEntry } from '../rules/arcade';
 import type { RunPhase } from '../rules/run';
 import './hud.css';
@@ -32,6 +34,11 @@ export class Hud {
   private readonly entry: HTMLDivElement;
   private readonly table: HTMLDivElement;
   private readonly toastEl: HTMLDivElement;
+  private readonly toys: HTMLDivElement;
+  private readonly prizeBanner: HTMLDivElement;
+  private collected: FigurineKind[] = [];
+  private prizeQueue: FigurineKind[] = [];
+  private prizeUntil = 0;
   private toastUntil = 0;
   private toastClock = 0;
   private painted = '';
@@ -59,6 +66,26 @@ export class Hud {
     this.entry = div('hud-entry');
     this.table = div('hud-table');
     this.toastEl = div('hud-toast');
+    this.toys = div('hud-toys');
+    this.prizeBanner = div('hud-prize');
+    this.resetToys();
+  }
+
+  resetToys(): void {
+    this.collected = [];
+    this.prizeQueue = [];
+    this.prizeUntil = 0;
+    this.prizeBanner.classList.remove('on');
+    this.toys.textContent = 'TOYS 0';
+    this.tablePainted = '';
+  }
+
+  collectToy(kind: FigurineKind): void {
+    this.collected.push(kind);
+    this.prizeQueue.push(kind);
+    this.toys.textContent = `TOYS ${this.collected.length}`;
+    for (const toy of [...new Set(this.collected)]) this.toys.append(toyPicture(toy));
+    this.tablePainted = '';
   }
 
   /** A short message that pops in under the chips. */
@@ -69,6 +96,22 @@ export class Hud {
 
   update(s: HudState): void {
     this.toastClock = performance.now() / 1000;
+    if (this.toastClock >= this.prizeUntil) {
+      this.prizeBanner.classList.remove('on');
+      const next = this.prizeQueue.shift();
+      if (next) {
+        const text = document.createElement('div');
+        const stamp = document.createElement('strong');
+        stamp.textContent = 'PRIZE!';
+        const name = document.createElement('span');
+        name.textContent = TOY_NAMES[next];
+        text.append(stamp, name);
+        this.prizeBanner.replaceChildren(toyPicture(next), text);
+        void this.prizeBanner.offsetWidth;
+        this.prizeBanner.classList.add('on');
+        this.prizeUntil = this.toastClock + 1.5;
+      }
+    }
     this.toastEl.classList.toggle('on', this.toastClock < this.toastUntil);
     const active = s.phase === 'playing' || s.phase === 'suddenDeath' || s.phase === 'lastCall' || s.phase === 'sweep';
     const banner =
@@ -163,6 +206,14 @@ export class Hud {
       li.append(name, score);
       list.append(li);
     }
-    this.table.append(title, yours, list);
+    const toys = document.createElement('div');
+    toys.className = 'hud-toy-list';
+    toys.textContent = this.collected.length ? 'YOUR TOYS' : 'NO TOYS THIS RUN';
+    for (const kind of [...new Set(this.collected)]) {
+      const row = document.createElement('div');
+      row.append(toyPicture(kind), `${TOY_NAMES[kind]} ×${this.collected.filter(t => t === kind).length}`);
+      toys.append(row);
+    }
+    this.table.append(title, yours, list, toys);
   }
 }
