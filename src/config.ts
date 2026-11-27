@@ -60,7 +60,8 @@ export const DECK = {
   /** Deck 1: the floor the upper pusher sweeps; its front face is a step down to deck 2. */
   y: 0,
   thickness: 1,
-  front: 8,
+  // 8 cm of floor ahead of the upper pusher: at 12 cm deck 1 hoarded ~150 coins and starved the tiers below.
+  front: 4,
 };
 
 /**
@@ -70,8 +71,11 @@ export const DECK = {
  * tray: its `front` is the paying edge (TRAY.front).
  */
 export const STEPS = [
-  { y: -2.5, front: 17, height: 1.6, depth: 14, frontMin: 8, frontMax: 12, period: 3.0 },
-  { y: -5, front: 31, height: 1.6, depth: 14, frontMin: 17, frontMax: 21, period: 3.6 },
+  // A short step deck (6 cm of floor ahead of its pusher) so it buffers few coins: a 9 cm one held ~100 and halved the
+  // first minute's payouts.
+  { y: -2.5, front: 10, height: 1.6, depth: 14, frontMin: 4, frontMax: 7.5, period: 3.0 },
+  // The lower tray's pusher reaches well out (to 17 of 28 cm), so the lower pile is always being shoved toward the edge.
+  { y: -5, front: 28, height: 1.6, depth: 16, frontMin: 10, frontMax: 17, period: 3.6 },
 ] as const;
 
 /** The lower tray's pusher: the last step (kept as a name for the structure's placement). */
@@ -83,7 +87,7 @@ export const TRAY = {
   back: -32,
   /** Floor height: the last step's floor. */
   y: -5,
-  front: 31,
+  front: 28,
   /** Side rails stop this far short of the front edge, so coins at the corners are lost. */
   openCorner: 5,
   railHeight: 3,
@@ -202,5 +206,5 @@ export const RULES = {
   hotMinHold: 20,
   hotMaxHold: 30,
   /** Coins already on the machine when it boots. */
-  startPile: 290,
+  startPile: 340,
 };

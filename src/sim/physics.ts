@@ -450,15 +450,19 @@ export class PhysicsWorld {
     const perLayer = 70;
     // Most of the pile sits on the deep lower tray; a share rides the middle deck in front of the upper pusher.
     // The pile is spread over every floor: deck 1 in front of the upper pusher, then each step's floor in front of its
-    // pusher. Each band gets an equal share.
+    // pusher. The lower floors get the bigger shares: with equal thirds deck 1 kept most of the pile, the lower pushers
+    // started nearly empty and a held stream paid only 10-27 coins in its first minute.
     const bands = [
       { y: DECK.y, zMin: PUSHER.frontMax + COIN.radius + 0.3, zMax: DECK.front - COIN.radius - 0.5 },
       ...STEPS.map((st, i) => ({ y: st.y, zMin: st.frontMin + COIN.radius + 0.5, zMax: (i === STEPS.length - 1 ? TRAY.front - 4 : st.front) - COIN.radius - 0.5 })),
     ];
-    const per = Math.ceil(RULES.startPile / bands.length);
+    const shares = [0.2, 0.35, 0.45];
+    const starts = shares.map((_, i) => Math.round(RULES.startPile * shares.slice(0, i).reduce((a, b) => a + b, 0)));
     for (let i = 0; i < RULES.startPile; i++) {
-      const band = bands[Math.floor(i / per)]!;
-      const layer = Math.floor((i % per) / perLayer);
+      let b = bands.length - 1;
+      while (b > 0 && i < starts[b]!) b--;
+      const band = bands[b]!;
+      const layer = Math.floor((i - starts[b]!) / perLayer);
       const kind = this.rng.next() < 0.12 ? pickKind(this.rng.next()) : 'standard';
       this.addCoin(this.rng.range(-xMax, xMax), band.y + 1 + layer * 1.4 + this.rng.range(0, 0.4), this.rng.range(band.zMin, band.zMax), null, kind);
     }

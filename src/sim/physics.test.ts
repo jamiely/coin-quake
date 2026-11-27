@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DROPPER, MAX_COINS, RULES, SIM, TRAY, COIN } from '../config';
+import { DROPPER, MAX_COINS, SIM, TRAY, COIN } from '../config';
 import { Rng } from '../rng';
 import { dropperX } from '../rules/dropper';
 import { PhysicsWorld, firstEdge, type SimEvent } from './physics';
@@ -13,8 +13,9 @@ const run = (world: PhysicsWorld, seconds: number): SimEvent[] => {
 describe('PhysicsWorld', () => {
   it('boots with a settled pile that does not spill before play', async () => {
     const world = await PhysicsWorld.create(new Rng(3));
-    // A few strokes settle the overhang at boot and the structure clears its footprint; the machine stays well stocked.
-    expect(world.coins.length).toBeGreaterThan(RULES.startPile * 0.55);
+    // A few strokes settle the overhang at boot (the overfilled lower floors spill) and the structure clears its
+    // footprint; the machine still boots well stocked.
+    expect(world.coins.length).toBeGreaterThan(110);
     const spilled = run(world, 3).filter((e) => e.type === 'frontExit' || e.type === 'sideExit');
     expect(spilled.length).toBeLessThan(world.coins.length * 0.05);
     world.dispose();
